@@ -1,0 +1,938 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css"
+      rel="stylesheet"
+    />
+    <link
+      href="https://unpkg.com/boxicons@2.0.9/css/boxicons.min.css"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="css/style1.css" />
+    <link rel="stylesheet" href="css/viewprofile.css" />
+    <title>LGU4 - Vehicle Routing & Diversion</title>
+    <style>
+      /* Vehicle Routing & Diversion Specific Styles */
+      .route-card {
+        border-left: 4px solid;
+        transition: all 0.3s;
+        border-radius: 8px;
+        background: white;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+        margin-bottom: 15px;
+      }
+      
+      .route-card:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+      }
+      
+      .route-active {
+        border-left-color: #06d6a0;
+        background: linear-gradient(to right, rgba(6, 214, 160, 0.05), white);
+      }
+      
+      .route-diverted {
+        border-left-color: #ffd166;
+        background: linear-gradient(to right, rgba(255, 209, 102, 0.05), white);
+      }
+      
+      .route-closed {
+        border-left-color: #e63946;
+        background: linear-gradient(to right, rgba(230, 57, 70, 0.05), white);
+      }
+      
+      .status-indicator {
+        display: inline-block;
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        margin-right: 5px;
+      }
+      
+      .status-active {
+        background-color: #06d6a0;
+      }
+      
+      .status-diverted {
+        background-color: #ffd166;
+      }
+      
+      .status-closed {
+        background-color: #e63946;
+      }
+      
+      .routing-form {
+        background: white;
+        border-radius: 10px;
+        padding: 2rem;
+        box-shadow: 0 5px 15px rgba(0,0,0,0.05);
+        border-top: 3px solid #1d3557;
+      }
+      
+      .report-table {
+        max-height: 500px;
+        overflow-y: auto;
+      }
+      
+      .tab-content {
+        padding: 20px;
+        background: white;
+        border-radius: 0 0 10px 10px;
+        box-shadow: 0 5px 15px rgba(0,0,0,0.05);
+      }
+      
+      .tab-buttons {
+        display: flex;
+        gap: 10px;
+        margin-bottom: 20px;
+      }
+      
+      .tab-button {
+        padding: 10px 20px;
+        background: #f8f9fa;
+        border: none;
+        border-radius: 5px 5px 0 0;
+        cursor: pointer;
+        transition: all 0.3s;
+      }
+      
+      .tab-button:hover {
+        background: #e9ecef;
+      }
+      
+      .tab-button.active {
+        background: #1d3557;
+        color: white;
+      }
+      
+      .map-container {
+        height: 400px;
+        border-radius: 10px;
+        overflow: hidden;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+      }
+      
+      .diversion-notice {
+        background: #fff3cd;
+        border: 1px solid #ffeaa7;
+        border-radius: 8px;
+        padding: 15px;
+        margin-bottom: 15px;
+      }
+      
+      .diversion-notice.urgent {
+        background: #f8d7da;
+        border-color: #f5c6cb;
+      }
+      
+      .route-marker {
+        display: inline-block;
+        width: 20px;
+        height: 20px;
+        border-radius: 50%;
+        text-align: center;
+        line-height: 20px;
+        color: white;
+        font-size: 12px;
+        font-weight: bold;
+        margin-right: 8px;
+      }
+      
+      .marker-start {
+        background-color: #28a745;
+      }
+      
+      .marker-end {
+        background-color: #dc3545;
+      }
+      
+      .marker-waypoint {
+        background-color: #007bff;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="avatarModal" class="modal">
+      <span class="close">&times;</span>
+      <img class="modal-content" id="modalImage" />
+    </div>
+    <section id="sidebar">
+      <a href="#" class="brand">
+        <img
+          src="img/ttm.png"
+          alt="Profile Photo"
+          class="profile-avatar"
+          id="profileAvatar"
+          style="cursor: pointer; transition: transform 0.2s"
+        />
+        <span class="text">Traffic And Transport Management</span>
+      </a>
+      <ul class="side-menu top">
+        <li>
+          <a href="index.html">
+            <i class="bx bxs-dashboard"></i>
+            <span class="text">Dashboard</span>
+          </a>
+        </li>
+        <span class="separator">Main</span>
+        
+        <li>
+          <a href="../TM/index.html">
+            <i class="bx bx-car"></i>
+            <span class="text">Traffic Monitoring (CCTV) </span>
+          </a>
+        </li>
+        <li>
+          <a href="../RTR/index.html">
+            <i class="bx bx-flame"></i>
+            <span class="text">Real-Time Road Updates</span>
+          </a>
+        </li>
+        <li>
+          <a href="../AVR/index.html">
+            <i class="bx bx-bell"></i>
+            <span class="text"> Accident & Violation Reports </span>
+          </a>
+        </li>
+        <li class="active">
+          <a href="#">
+            <i class="bx bx-map"></i>
+            <span class="text">Vehicle Routing & Diversion</span>
+          </a>
+        </li>
+        <li>
+          <a href="../TSC/index.html">
+            <i class="bx bx-bar-chart-big"></i>
+            <span class="text"> Traffic Signal Control</span>
+          </a>
+        </li>
+        <li>
+          <a href="../PTS/index.html">
+            <i class="bx bx-megaphone-alt"></i>
+            <span class="text">Public Transport Sync </span>
+          </a>
+        </li>
+        <li>
+          <a href="../PATS/index.html">
+            <i class="bx bx-heart-plus"></i>
+            <span class="text">Permit & Ticketing System</span>
+          </a>
+        </li>
+        
+      </ul>
+      <ul class="side-menu">
+        <span class="separator">SETTINGS</span>
+        <li>
+          <a href="Profile.html">
+            <i class="bx bxs-user-pin"></i>
+            <span class="text">Profile</span>
+          </a>
+        </li>
+        <li>
+          <a href="Settings.html">
+            <i class="bx bxs-cog"></i>
+            <span class="text">Settings</span>
+          </a>
+        </li>
+        <li>
+          <a href="#" class="logout">
+            <i class="bx bxs-log-out-circle"></i>
+            <span class="text">Logout</span>
+          </a>
+        </li>
+      </ul>
+    </section>
+    <section id="content">
+      <nav>
+        <a href="#" class="nav-link">Categories</a>
+        <form action="#">
+          <div class="form-input">
+            <input type="search" placeholder="Search..." />
+            <button type="submit" class="search-btn">
+              <i class="bx bx-search"></i>
+            </button>
+          </div>
+        </form>
+        <a href="#" class="notification">
+          <i class="bx bxs-bell"></i>
+          <span class="num">9+</span>
+        </a>
+        <div class="profile-dropdown">
+          <a href="#" class="profile" id="profile-btn">
+            <img src="img/aiah.jpg" />
+          </a>
+          <div class="dropdown-menu" id="dropdown-menu">
+            <a href="Profile.html">Profile</a>
+            <a href="Settings.html">Settings</a>
+          </div>
+        </div>
+      </nav>
+      <main>
+        <div class="head-title">
+          <div class="left">
+            <h1>Vehicle Routing & Diversion</h1>
+            <ul class="breadcrumb">
+              <li>
+                <a href="#">Dashboard</a>
+              </li>
+              <li><i class="bx bx-chevron-right"></i></li>
+              <li>
+                <a class="active" href="#">Vehicle Routing & Diversion</a>
+              </li>
+            </ul>
+          </div>
+        </div>
+        
+        <div class="tab-buttons">
+          <button class="tab-button active" onclick="openTab(event, 'route_suggestions')">
+            <i class="bx bx-map"></i> Route Suggestions
+          </button>
+          <button class="tab-button" onclick="openTab(event, 'diversion_notices')">
+            <i class="bx bx-error-circle"></i> Diversion Notices
+          </button>
+          <button class="tab-button" onclick="openTab(event, 'admin_routes')">
+            <i class="bx bx-cog"></i> Admin Route Management
+          </button>
+        </div>
+        
+        <!-- Route Suggestions Tab -->
+        <div id="route_suggestions" class="tab-content" style="display: block;">
+          <div class="row">
+            <div class="col-md-8">
+              <div class="routing-form">
+                <h4><i class="bx bx-map"></i> Interactive Route Map</h4>
+                <div class="map-container">
+                  <iframe
+                    src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3861.2396!2d121.0244!3d14.5547!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x0%3A0x0!2zMTTCsDMzJzE3LjAiTiAxMjHCsDAyJzE2LjAiRQ!5e0!3m2!1sen!2sph!4v1234567890"
+                    width="100%"
+                    height="400"
+                    style="border:0;"
+                    allowfullscreen=""
+                    loading="lazy"
+                    referrerpolicy="no-referrer-when-downgrade">
+                  </iframe>
+                </div>
+                <div class="mt-3">
+                  <button class="btn btn-primary" onclick="refreshMap()">
+                    <i class="bx bx-refresh"></i> Refresh Map
+                  </button>
+                  <button class="btn btn-outline-secondary ms-2" onclick="toggleTraffic()">
+                    <i class="bx bx-traffic-cone"></i> Toggle Traffic Layer
+                  </button>
+                  <button class="btn btn-outline-info ms-2" onclick="showAlternateRoutes()">
+                    <i class="bx bx-git-branch"></i> Show Alternate Routes
+                  </button>
+                </div>
+              </div>
+            </div>
+            
+            <div class="col-md-4">
+              <div class="routing-form">
+                <h4><i class="bx bx-target"></i> Common Destinations</h4>
+                <div class="route-card route-active p-3">
+                  <div class="d-flex align-items-center">
+                    <span class="route-marker marker-start">A</span>
+                    <div>
+                      <h6 class="mb-1">City Hall</h6>
+                      <small class="text-muted">Main Government Complex</small>
+                    </div>
+                  </div>
+                  <div class="mt-2">
+                    <span class="status-indicator status-active"></span>
+                    <small>Route Active - 15 min</small>
+                  </div>
+                </div>
+                
+                <div class="route-card route-active p-3">
+                  <div class="d-flex align-items-center">
+                    <span class="route-marker marker-start">B</span>
+                    <div>
+                      <h6 class="mb-1">Central Market</h6>
+                      <small class="text-muted">Public Market Area</small>
+                    </div>
+                  </div>
+                  <div class="mt-2">
+                    <span class="status-indicator status-active"></span>
+                    <small>Route Active - 8 min</small>
+                  </div>
+                </div>
+                
+                <div class="route-card route-diverted p-3">
+                  <div class="d-flex align-items-center">
+                    <span class="route-marker marker-waypoint">C</span>
+                    <div>
+                      <h6 class="mb-1">Hospital District</h6>
+                      <small class="text-muted">Medical Center Complex</small>
+                    </div>
+                  </div>
+                  <div class="mt-2">
+                    <span class="status-indicator status-diverted"></span>
+                    <small>Alternate Route - 22 min</small>
+                  </div>
+                </div>
+                
+                <div class="route-card route-closed p-3">
+                  <div class="d-flex align-items-center">
+                    <span class="route-marker marker-end">D</span>
+                    <div>
+                      <h6 class="mb-1">Industrial Zone</h6>
+                      <small class="text-muted">Manufacturing District</small>
+                    </div>
+                  </div>
+                  <div class="mt-2">
+                    <span class="status-indicator status-closed"></span>
+                    <small>Route Closed - Road Work</small>
+                  </div>
+                </div>
+                
+                <div class="mt-3">
+                  <button class="btn btn-sm btn-outline-primary w-100">
+                    <i class="bx bx-plus"></i> Add Custom Destination
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Diversion Notices Tab -->
+        <div id="diversion_notices" class="tab-content" style="display: none;">
+          <div class="row">
+            <div class="col-md-6">
+              <div class="routing-form">
+                <h4><i class="bx bx-error-circle"></i> Create Diversion Notice</h4>
+                <form id="diversionForm">
+                  <div class="mb-3">
+                    <label class="form-label">Affected Road/Area</label>
+                    <input type="text" class="form-control" id="affectedRoad" placeholder="Enter road name or area" required>
+                  </div>
+                  
+                  <div class="mb-3">
+                    <label class="form-label">Diversion Reason</label>
+                    <select class="form-select" id="diversionReason" required>
+                      <option value="">Select reason</option>
+                      <option value="roadwork">Road Construction/Repair</option>
+                      <option value="accident">Traffic Accident</option>
+                      <option value="event">Special Event</option>
+                      <option value="weather">Weather Conditions</option>
+                      <option value="emergency">Emergency Situation</option>
+                      <option value="other">Other</option>
+                    </select>
+                  </div>
+                  
+                  <div class="row mb-3">
+                    <div class="col-md-6">
+                      <label class="form-label">Start Date</label>
+                      <input type="date" class="form-control" id="startDate" required>
+                    </div>
+                    <div class="col-md-6">
+                      <label class="form-label">Start Time</label>
+                      <input type="time" class="form-control" id="startTime" required>
+                    </div>
+                  </div>
+                  
+                  <div class="row mb-3">
+                    <div class="col-md-6">
+                      <label class="form-label">End Date</label>
+                      <input type="date" class="form-control" id="endDate" required>
+                    </div>
+                    <div class="col-md-6">
+                      <label class="form-label">End Time</label>
+                      <input type="time" class="form-control" id="endTime" required>
+                    </div>
+                  </div>
+                  
+                  <div class="mb-3">
+                    <label class="form-label">Alternative Route</label>
+                    <textarea class="form-control" id="alternativeRoute" rows="3" placeholder="Describe the recommended alternative route"></textarea>
+                  </div>
+                  
+                  <div class="mb-3">
+                    <label class="form-label">Priority Level</label>
+                    <select class="form-select" id="priorityLevel" required>
+                      <option value="">Select priority</option>
+                      <option value="low">Low - Minor inconvenience</option>
+                      <option value="medium">Medium - Moderate delay expected</option>
+                      <option value="high">High - Significant impact</option>
+                      <option value="urgent">Urgent - Immediate attention required</option>
+                    </select>
+                  </div>
+                  
+                  <div class="mb-3">
+                    <label class="form-label">Additional Details</label>
+                    <textarea class="form-control" id="additionalDetails" rows="3" placeholder="Any additional information about the diversion"></textarea>
+                  </div>
+                  
+                  <button type="submit" class="btn btn-primary">
+                    <i class="bx bx-save"></i> Create Notice
+                  </button>
+                  <button type="reset" class="btn btn-outline-secondary ms-2">
+                    <i class="bx bx-reset"></i> Reset
+                  </button>
+                </form>
+              </div>
+            </div>
+            
+            <div class="col-md-6">
+              <div class="routing-form">
+                <h4><i class="bx bx-list-ul"></i> Active Diversion Notices</h4>
+                <div class="report-table">
+                  <div id="diversionNotices">
+                    <!-- Notices will be populated here -->
+                  </div>
+                </div>
+                <div class="alert alert-info mt-3">
+                  <i class="bx bx-info-circle"></i> Notices are automatically removed after end date/time.
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Admin Route Management Tab -->
+        <div id="admin_routes" class="tab-content" style="display: none;">
+          <div class="row">
+            <div class="col-md-6">
+              <div class="routing-form">
+                <h4><i class="bx bx-cog"></i> Route Management</h4>
+                <form id="routeForm">
+                  <div class="mb-3">
+                    <label class="form-label">Route Name</label>
+                    <input type="text" class="form-control" id="routeName" placeholder="Enter route name" required>
+                  </div>
+                  
+                  <div class="mb-3">
+                    <label class="form-label">Starting Point</label>
+                    <input type="text" class="form-control" id="startPoint" placeholder="Enter starting location" required>
+                  </div>
+                  
+                  <div class="mb-3">
+                    <label class="form-label">Destination</label>
+                    <input type="text" class="form-control" id="destination" placeholder="Enter destination" required>
+                  </div>
+                  
+                  <div class="mb-3">
+                    <label class="form-label">Route Type</label>
+                    <select class="form-select" id="routeType" required>
+                      <option value="">Select route type</option>
+                      <option value="primary">Primary Route</option>
+                      <option value="alternate">Alternate Route</option>
+                      <option value="emergency">Emergency Route</option>
+                      <option value="seasonal">Seasonal Route</option>
+                    </select>
+                  </div>
+                  
+                  <div class="mb-3">
+                    <label class="form-label">Estimated Travel Time (minutes)</label>
+                    <input type="number" class="form-control" id="travelTime" placeholder="Enter time in minutes" required>
+                  </div>
+                  
+                  <div class="mb-3">
+                    <label class="form-label">Distance (km)</label>
+                    <input type="number" step="0.1" class="form-control" id="distance" placeholder="Enter distance" required>
+                  </div>
+                  
+                  <div class="mb-3">
+                    <label class="form-label">Route Status</label>
+                    <select class="form-select" id="routeStatus" required>
+                      <option value="">Select status</option>
+                      <option value="active">Active</option>
+                      <option value="inactive">Inactive</option>
+                      <option value="maintenance">Under Maintenance</option>
+                      <option value="closed">Temporarily Closed</option>
+                    </select>
+                  </div>
+                  
+                  <div class="mb-3">
+                    <label class="form-label">Route Description</label>
+                    <textarea class="form-control" id="routeDescription" rows="3" placeholder="Describe the route details"></textarea>
+                  </div>
+                  
+                  <button type="submit" class="btn btn-primary">
+                    <i class="bx bx-save"></i> Save Route
+                  </button>
+                  <button type="reset" class="btn btn-outline-secondary ms-2">
+                    <i class="bx bx-reset"></i> Reset
+                  </button>
+                </form>
+              </div>
+            </div>
+            
+            <div class="col-md-6">
+              <div class="routing-form">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                  <h4><i class="bx bx-list-ul"></i> Existing Routes</h4>
+                  <div>
+                    <button class="btn btn-sm btn-outline-secondary" onclick="filterRoutes()">
+                      <i class="bx bx-filter"></i> Filter
+                    </button>
+                    <button class="btn btn-sm btn-outline-primary ms-2" onclick="exportRoutes()">
+                      <i class="bx bx-download"></i> Export
+                    </button>
+                  </div>
+                </div>
+                
+                <div class="report-table">
+                  <table class="table table-hover">
+                    <thead>
+                      <tr>
+                        <th>Route Name</th>
+                        <th>Type</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody id="routesTable">
+                      <!-- Routes will be populated here -->
+                    </tbody>
+                  </table>
+                </div>
+                
+                <div class="alert alert-info mt-3">
+                  <i class="bx bx-info-circle"></i> Routes are saved to local storage and can be edited or deleted.
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </main>
+    </section>
+    
+    <script src="script.js"></script>
+    <script>
+      // Tab functionality
+      function openTab(evt, tabName) {
+        var i, tabcontent, tabbuttons;
+        
+        // Hide all tab content
+        tabcontent = document.getElementsByClassName("tab-content");
+        for (i = 0; i < tabcontent.length; i++) {
+          tabcontent[i].style.display = "none";
+        }
+        
+        // Remove active class from all buttons
+        tabbuttons = document.getElementsByClassName("tab-button");
+        for (i = 0; i < tabbuttons.length; i++) {
+          tabbuttons[i].classList.remove("active");
+        }
+        
+        // Show the current tab and add active class to the button
+        document.getElementById(tabName).style.display = "block";
+        evt.currentTarget.classList.add("active");
+        
+        // Load data when tabs are clicked
+        if(tabName === 'diversion_notices') {
+          loadDiversionNotices();
+        } else if(tabName === 'admin_routes') {
+          loadRoutes();
+        }
+      }
+      
+      // Diversion Form Handling
+      document.getElementById('diversionForm').addEventListener('submit', function(e) {
+        e.preventDefault();
+        
+        // Get form values
+        const affectedRoad = document.getElementById('affectedRoad').value;
+        const reason = document.getElementById('diversionReason').value;
+        const startDate = document.getElementById('startDate').value;
+        const startTime = document.getElementById('startTime').value;
+        const endDate = document.getElementById('endDate').value;
+        const endTime = document.getElementById('endTime').value;
+        const alternativeRoute = document.getElementById('alternativeRoute').value;
+        const priority = document.getElementById('priorityLevel').value;
+        const details = document.getElementById('additionalDetails').value;
+        
+        // Create diversion object
+        const diversionEntry = {
+          affectedRoad,
+          reason,
+          startDate,
+          startTime,
+          endDate,
+          endTime,
+          alternativeRoute,
+          priority,
+          details,
+          timestamp: new Date().getTime()
+        };
+        
+        // Save to localStorage
+        saveDiversion(diversionEntry);
+        
+        // Reset form
+        this.reset();
+        
+        // Show success message
+        alert('Diversion notice created successfully!');
+        
+        // Refresh notices
+        loadDiversionNotices();
+      });
+      
+      // Route Form Handling
+      document.getElementById('routeForm').addEventListener('submit', function(e) {
+        e.preventDefault();
+        
+        // Get form values
+        const routeName = document.getElementById('routeName').value;
+        const startPoint = document.getElementById('startPoint').value;
+        const destination = document.getElementById('destination').value;
+        const routeType = document.getElementById('routeType').value;
+        const travelTime = document.getElementById('travelTime').value;
+        const distance = document.getElementById('distance').value;
+        const routeStatus = document.getElementById('routeStatus').value;
+        const description = document.getElementById('routeDescription').value;
+        
+        // Create route object
+        const routeEntry = {
+          routeName,
+          startPoint,
+          destination,
+          routeType,
+          travelTime,
+          distance,
+          routeStatus,
+          description,
+          timestamp: new Date().getTime()
+        };
+        
+        // Save to localStorage
+        saveRoute(routeEntry);
+        
+        // Reset form
+        this.reset();
+        
+        // Show success message
+        alert('Route saved successfully!');
+        
+        // Refresh routes
+        loadRoutes();
+      });
+      
+      // Save diversion to localStorage
+      function saveDiversion(diversionEntry) {
+        let diversions = JSON.parse(localStorage.getItem('diversionNotices')) || [];
+        diversions.push(diversionEntry);
+        localStorage.setItem('diversionNotices', JSON.stringify(diversions));
+      }
+      
+      // Save route to localStorage
+      function saveRoute(routeEntry) {
+        let routes = JSON.parse(localStorage.getItem('routes')) || [];
+        routes.push(routeEntry);
+        localStorage.setItem('routes', JSON.stringify(routes));
+      }
+      
+      // Load diversion notices
+      function loadDiversionNotices() {
+        const diversions = JSON.parse(localStorage.getItem('diversionNotices')) || [];
+        const noticesContainer = document.getElementById('diversionNotices');
+        noticesContainer.innerHTML = '';
+        
+        if(diversions.length === 0) {
+          noticesContainer.innerHTML = '<div class="alert alert-secondary">No active diversion notices</div>';
+          return;
+        }
+        
+        // Sort by timestamp (newest first)
+        const sortedDiversions = diversions.sort((a, b) => b.timestamp - a.timestamp);
+        
+        sortedDiversions.forEach((diversion, index) => {
+          const noticeDiv = document.createElement('div');
+          let priorityClass = diversion.priority === 'urgent' ? 'urgent' : '';
+          
+          noticeDiv.className = `diversion-notice ${priorityClass}`;
+          noticeDiv.innerHTML = `
+            <div class="d-flex justify-content-between align-items-start">
+              <div>
+                <h6 class="mb-1">${diversion.affectedRoad}</h6>
+                <p class="mb-1"><strong>Reason:</strong> ${diversion.reason}</p>
+                <p class="mb-1"><strong>Duration:</strong> ${diversion.startDate} ${diversion.startTime} - ${diversion.endDate} ${diversion.endTime}</p>
+                <p class="mb-1"><strong>Alternative:</strong> ${diversion.alternativeRoute || 'Not specified'}</p>
+                <small class="text-muted">${diversion.details || 'No additional details'}</small>
+              </div>
+              <div>
+                <span class="badge ${getPriorityBadgeClass(diversion.priority)}">${diversion.priority.toUpperCase()}</span>
+                <button class="btn btn-sm btn-outline-danger ms-2" onclick="deleteDiversion(${index})">
+                  <i class="bx bx-trash"></i>
+                </button>
+              </div>
+            </div>
+          `;
+          
+          noticesContainer.appendChild(noticeDiv);
+        });
+      }
+      
+      // Load routes
+      function loadRoutes() {
+        const routes = JSON.parse(localStorage.getItem('routes')) || [];
+        const routesTable = document.getElementById('routesTable');
+        routesTable.innerHTML = '';
+        
+        if(routes.length === 0) {
+          routesTable.innerHTML = '<tr><td colspan="4" class="text-center">No routes available</td></tr>';
+          return;
+        }
+        
+        routes.forEach((route, index) => {
+          const row = document.createElement('tr');
+          
+          row.innerHTML = `
+            <td>
+              <strong>${route.routeName}</strong><br>
+              <small class="text-muted">${route.startPoint} → ${route.destination}</small>
+            </td>
+            <td><span class="badge bg-info">${route.routeType}</span></td>
+            <td><span class="badge ${getStatusBadgeClass(route.routeStatus)}">${route.routeStatus}</span></td>
+            <td>
+              <button class="btn btn-sm btn-outline-primary" onclick="editRoute(${index})">
+                <i class="bx bx-edit"></i>
+              </button>
+              <button class="btn btn-sm btn-outline-danger ms-1" onclick="deleteRoute(${index})">
+                <i class="bx bx-trash"></i>
+              </button>
+            </td>
+          `;
+          
+          routesTable.appendChild(row);
+        });
+      }
+      
+      // Helper functions
+      function getPriorityBadgeClass(priority) {
+        switch(priority) {
+          case 'low': return 'bg-success';
+          case 'medium': return 'bg-warning';
+          case 'high': return 'bg-danger';
+          case 'urgent': return 'bg-dark';
+          default: return 'bg-secondary';
+        }
+      }
+      
+      function getStatusBadgeClass(status) {
+        switch(status) {
+          case 'active': return 'bg-success';
+          case 'inactive': return 'bg-secondary';
+          case 'maintenance': return 'bg-warning';
+          case 'closed': return 'bg-danger';
+          default: return 'bg-secondary';
+        }
+      }
+      
+      // Delete functions
+      function deleteDiversion(index) {
+        if(confirm('Are you sure you want to delete this diversion notice?')) {
+          let diversions = JSON.parse(localStorage.getItem('diversionNotices')) || [];
+          diversions.splice(index, 1);
+          localStorage.setItem('diversionNotices', JSON.stringify(diversions));
+          loadDiversionNotices();
+        }
+      }
+      
+      function deleteRoute(index) {
+        if(confirm('Are you sure you want to delete this route?')) {
+          let routes = JSON.parse(localStorage.getItem('routes')) || [];
+          routes.splice(index, 1);
+          localStorage.setItem('routes', JSON.stringify(routes));
+          loadRoutes();
+        }
+      }
+      
+      // Edit route function
+      function editRoute(index) {
+        const routes = JSON.parse(localStorage.getItem('routes')) || [];
+        const route = routes[index];
+        
+        // Populate form with route data
+        document.getElementById('routeName').value = route.routeName;
+        document.getElementById('startPoint').value = route.startPoint;
+        document.getElementById('destination').value = route.destination;
+        document.getElementById('routeType').value = route.routeType;
+        document.getElementById('travelTime').value = route.travelTime;
+        document.getElementById('distance').value = route.distance;
+        document.getElementById('routeStatus').value = route.routeStatus;
+        document.getElementById('routeDescription').value = route.description;
+        
+        // Delete the old route
+        routes.splice(index, 1);
+        localStorage.setItem('routes', JSON.stringify(routes));
+        loadRoutes();
+      }
+      
+      // Map functions
+      function refreshMap() {
+        alert('Map refreshed with latest traffic data');
+      }
+      
+      function toggleTraffic() {
+        alert('Traffic layer toggled');
+      }
+      
+      function showAlternateRoutes() {
+        alert('Showing alternate routes on map');
+      }
+      
+      // Filter and export functions
+      function filterRoutes() {
+        alert('Route filtering functionality would be implemented here');
+      }
+      
+      function exportRoutes() {
+        alert('Route export functionality would be implemented here');
+      }
+      
+      // Profile dropdown functionality
+      document.getElementById("profile-btn").addEventListener("click", function (event) {
+        event.preventDefault();
+        document.getElementById("dropdown-menu").classList.toggle("show");
+      });
+      
+      document.addEventListener("click", function (event) {
+        if (!document.getElementById("profile-btn").contains(event.target)) {
+          document.getElementById("dropdown-menu").classList.remove("show");
+        }
+      });
+      
+      // Avatar modal functionality
+      var modal = document.getElementById("avatarModal");
+      var img = document.getElementById("profileAvatar");
+      var modalImg = document.getElementById("modalImage");
+      
+      img.onclick = function () {
+        modal.style.display = "block";
+        modalImg.src = this.src;
+      };
+      
+      var span = document.getElementsByClassName("close")[0];
+      span.onclick = function () {
+        modal.style.display = "none";
+      };
+      
+      modal.onclick = function (event) {
+        if (event.target === modal) {
+          modal.style.display = "none";
+        }
+      };
+      
+      // Avatar click animation
+      document.getElementById("profileAvatar").addEventListener("click", function () {
+        this.style.transform = "scale(0.95)";
+        setTimeout(() => {
+          this.style.transform = "scale(1)";
+        }, 200);
+      });
+      
+      // Initialize on page load
+      document.addEventListener('DOMContentLoaded', function() {
+        loadDiversionNotices();
+        loadRoutes();
+      });
+    </script>
+  </body>
+</html>

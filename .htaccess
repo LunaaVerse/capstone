@@ -1,0 +1,24 @@
+# Enable mod_rewrite (pretty URLs)
+RewriteEngine On
+
+# Protect .htaccess file itself
+<Files .htaccess>
+    Order allow,deny
+    Deny from all
+</Files>
+
+# Prevent directory listing
+Options -Indexes
+
+# Set default index file
+DirectoryIndex index.php index.html
+
+# Allow access to all files (remove 403 for normal files)
+<FilesMatch "\.(php|html|css|js|png|jpg|jpeg|gif|svg|ico)$">
+    Order allow,deny
+    Allow from all
+</FilesMatch>
+
+# PHP error reporting (optional, for development)
+# php_flag display_errors On
+# php_value error_reporting 32767
