@@ -432,10 +432,10 @@ try {
         <?php endif; ?>
     </div>
 
-    <section id="sidebar">
+     <section id="sidebar">
         <a href="#" class="brand">
             <img
-                src="img/ttm.png"
+                src="../img/ttm.png"
                 alt="Profile Photo"
                 class="profile-avatar"
                 id="profileAvatar"
@@ -445,7 +445,7 @@ try {
         </a>
         <ul class="side-menu top">
             <li>
-                <a href="index.php">
+                <a href="../index.php">
                     <i class="bx bxs-dashboard"></i>
                     <span class="text">Dashboard</span>
                 </a>
@@ -470,20 +470,20 @@ try {
                     <span class="text">Accident & Violation Reports</span>
                 </a>
             </li>
-            <li>
+            <li class="active">
                 <a href="../VRD/index.php">
                     <i class="bx bx-map"></i>
                     <span class="text">Vehicle Routing & Diversion</span>
                 </a>
             </li>
-            <li class="active">
+            <li>
                 <a href="../TSC/index.php">
                     <i class="bx bx-toggle-left"></i>
                     <span class="text">Traffic Signal Control</span>
                 </a>
             </li>
             <li>
-                <a href="../PTS/index.php">
+                <a href="../PT/index.php">
                     <i class="bx bx-train"></i>
                     <span class="text">Public Transport Sync</span>
                 </a>
@@ -498,19 +498,19 @@ try {
         <ul class="side-menu">
             <span class="separator">SETTINGS</span>
             <li>
-                <a href="Profile.php">
+                <a href="../Profile.php">
                     <i class="bx bxs-user-pin"></i>
                     <span class="text">Profile</span>
                 </a>
             </li>
             <li>
-                <a href="Settings.php">
+                <a href="../Settings.php">
                     <i class="bx bxs-cog"></i>
                     <span class="text">Settings</span>
                 </a>
             </li>
             <li>
-                <a href="logout.php" class="logout">
+                <a href="../logout.php" class="logout">
                     <i class="bx bxs-log-out-circle"></i>
                     <span class="text">Logout</span>
                 </a>

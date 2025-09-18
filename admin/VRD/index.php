@@ -133,13 +133,13 @@ try {
 }
 
 // Get active diversions count for dashboard
+// Get active diversions count for dashboard
 $active_diversions_count = 0;
 try {
     $current_date = date('Y-m-d');
     $current_time = date('H:i:s');
     $stmt = $pdo_connection->query("SELECT COUNT(*) as count FROM diversion_notices 
-                         WHERE status = 'active' 
-                         AND (end_date > '$current_date' OR (end_date = '$current_date' AND end_time > '$current_time'))");
+                         WHERE (end_date > '$current_date' OR (end_date = '$current_date' AND end_time > '$current_time'))");
     $result = $stmt->fetch();
     $active_diversions_count = $result['count'];
 } catch (PDOException $e) {

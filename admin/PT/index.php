@@ -344,13 +344,13 @@ $on_time_performance = rand(80, 95);
           </a>
         </li>
         <li class="active">
-          <a href="#">
+          <a href="PT">
             <i class="bx bx-bus"></i>
             <span class="text">Public Transport Sync</span>
           </a>
         </li>
         <li>
-          <a href="../PATS/index.php">
+          <a href="../PTS/index.php">
             <i class="bx bx-heart-plus"></i>
             <span class="text">Permit & Ticketing System</span>
           </a>
