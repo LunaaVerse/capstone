@@ -567,7 +567,7 @@ if (in_array($user_role, ['admin', 'officer'])) {
                                     <input type="text" class="form-control" name="full_name" placeholder="Enter your full name" required>
                                 </div>
                                 
-                                <div class="mb-3">
+                                <div class mb-3">
                                     <label class="form-label">Event Purpose *</label>
                                     <input type="text" class="form-control" name="event_purpose" placeholder="Describe the purpose of your event" required>
                                 </div>
@@ -871,35 +871,60 @@ if (in_array($user_role, ['admin', 'officer'])) {
             <?php endif; ?>
         }
         
+        // View permit details
+        function viewPermitDetails(permitId) {
+            alert('Viewing details for permit: ' + permitId);
+            // In a real application, this would open a modal or redirect to a details page
+        }
+        
+        // Filter permits (for admin view)
+        function filterPermits() {
+            alert('Filter functionality would be implemented here');
+        }
+        
+        // Export to PDF
+        function exportToPDF() {
+            alert('PDF export functionality would be implemented here');
+        }
+        
         // Initialize when page loads
         document.addEventListener('DOMContentLoaded', function() {
             initCharts();
             
-            // Auto-hide alerts after 5 seconds
-            setTimeout(function() {
-                const alerts = document.querySelectorAll('.alert');
-                alerts.forEach(function(alert) {
-                    const bsAlert = new bootstrap.Alert(alert);
-                    bsAlert.close();
+            // Profile dropdown functionality
+            const profileBtn = document.getElementById('profile-btn');
+            const dropdownMenu = document.getElementById('dropdown-menu');
+            
+            if (profileBtn && dropdownMenu) {
+                profileBtn.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    dropdownMenu.style.display = dropdownMenu.style.display === 'block' ? 'none' : 'block';
                 });
-            }, 5000);
+                
+                // Close dropdown when clicking outside
+                document.addEventListener('click', function(e) {
+                    if (!profileBtn.contains(e.target) && !dropdownMenu.contains(e.target)) {
+                        dropdownMenu.style.display = 'none';
+                    }
+                });
+            }
+            
+            // Profile avatar animation
+            const profileAvatar = document.getElementById('profileAvatar');
+            if (profileAvatar) {
+                profileAvatar.addEventListener('mouseover', function() {
+                    this.style.transform = 'scale(1.1)';
+                });
+                
+                profileAvatar.addEventListener('mouseout', function() {
+                    this.style.transform = 'scale(1)';
+                });
+                
+                profileAvatar.addEventListener('click', function() {
+                    window.location.href = '../../Profile.php';
+                });
+            }
         });
-        
-        // Helper functions for permit management
-        function viewPermitDetails(permitId) {
-            alert('Viewing details for permit: ' + permitId);
-            // In a real application, this would show a modal with permit details
-        }
-        
-        function filterPermits() {
-            alert('Filtering permits...');
-            // In a real application, this would show a filter modal
-        }
-        
-        function exportToPDF() {
-            alert('Exporting to PDF...');
-            // In a real application, this would generate and download a PDF report
-        }
     </script>
 </body>
 </html>

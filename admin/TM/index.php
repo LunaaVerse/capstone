@@ -29,9 +29,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $reported_by = $_SESSION['user_id'];
         
         try {
-            $stmt = $pdo->prepare("INSERT INTO traffic_logs (location, log_date, log_time, status_id, average_speed_kmh, vehicle_count, notes, reported_by) 
-                                  VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
-            $stmt->execute([$location, $log_date, $log_time, $status_id, $average_speed, $vehicle_count, $notes, $reported_by]);
+          $stmt = $pdo->prepare("INSERT INTO traffic_logs (user_id, location, log_date, log_time, status_id, average_speed_kmh, vehicle_count, notes, reported_by) 
+                      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
+$stmt->execute([$_SESSION['user_id'], $location, $log_date, $log_time, $status_id, $average_speed, $vehicle_count, $notes, $reported_by]);
             
             $_SESSION['success_message'] = "Traffic log created successfully!";
             header("Location: " . $_SERVER['PHP_SELF']);
