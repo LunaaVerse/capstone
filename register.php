@@ -762,7 +762,8 @@ if (isset($_SESSION['verification_error'])) {
         <div class="auth-wrapper">
             <!-- Branding Section -->
             <div class="auth-brand">
-                <div class="brand-logo">
+                 <div class="brand-logo">
+                <<img src="img/ttm.png" alt="TTM Logo" style="width: 175px; height: 175px;">
                     <i class="fas fa-traffic-light"></i>
                 </div>
                 <h1 class="brand-title">TTM</h1>

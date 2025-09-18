@@ -753,7 +753,7 @@ if (empty($_SESSION['user_id']) && isset($_COOKIE['remember_me'])) {
             <!-- Branding Section -->
             <div class="auth-brand">
                 <div class="brand-logo">
-                    <i class="fas fa-traffic-light"></i>
+                    <img src="img/ttm.png" alt="TTM Logo" style="width: 175px; height: 175px;">
                 </div>
                 <h1 class="brand-title">TTM</h1>
                 <p class="brand-subtitle">Traffic and Transport Management System</p>
