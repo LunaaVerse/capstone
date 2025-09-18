@@ -293,90 +293,90 @@ $on_time_performance = rand(80, 95);
       <img class="modal-content" id="modalImage" />
     </div>
     
-    <section id="sidebar">
-      <a href="#" class="brand">
-        <img
-          src="img/ttm.png"
-          alt="Profile Photo"
-          class="profile-avatar"
-          id="profileAvatar"
-          style="cursor: pointer; transition: transform 0.2s"
-        />
-        <span class="text">Traffic And Transport Management</span>
-      </a>
-      <ul class="side-menu top">
-        <li>
-          <a href="index.php">
-            <i class="bx bxs-dashboard"></i>
-            <span class="text">Dashboard</span>
-          </a>
-        </li>
-        <span class="separator">Main</span>
-        
-        <li>
-          <a href="../TM/index.php">
-            <i class="bx bx-car"></i>
-            <span class="text">Traffic Monitoring (CCTV)</span>
-          </a>
-        </li>
-        <li>
-          <a href="../RTR/index.php">
-            <i class="bx bx-flame"></i>
-            <span class="text">Real-Time Road Updates</span>
-          </a>
-        </li>
-        <li>
-          <a href="../AVR/index.php">
-            <i class="bx bx-bell"></i>
-            <span class="text">Accident & Violation Reports</span>
-          </a>
-        </li>
-        <li>
-          <a href="../VRD/index.php">
-            <i class="bx bx-user"></i>
-            <span class="text">Vehicle Routing & Diversion</span>
-          </a>
-        </li>
-        <li>
-          <a href="../TSC/index.php">
-            <i class="bx bx-bar-chart-big"></i>
-            <span class="text">Traffic Signal Control</span>
-          </a>
-        </li>
-        <li class="active">
-          <a href="PT">
-            <i class="bx bx-bus"></i>
-            <span class="text">Public Transport Sync</span>
-          </a>
-        </li>
-        <li>
-          <a href="../PTS/index.php">
-            <i class="bx bx-heart-plus"></i>
-            <span class="text">Permit & Ticketing System</span>
-          </a>
-        </li>
-      </ul>
-      <ul class="side-menu">
-        <span class="separator">SETTINGS</span>
-        <li>
-          <a href="Profile.php">
-            <i class="bx bxs-user-pin"></i>
-            <span class="text">Profile</span>
-          </a>
-        </li>
-        <li>
-          <a href="Settings.php">
-            <i class="bx bxs-cog"></i>
-            <span class="text">Settings</span>
-          </a>
-        </li>
-        <li>
-          <a href="logout.php" class="logout">
-            <i class="bx bxs-log-out-circle"></i>
-            <span class="text">Logout</span>
-          </a>
-        </li>
-      </ul>
+        <section id="sidebar">
+        <a href="#" class="brand">
+            <img
+                src="../img/ttm.png"
+                alt="Profile Photo"
+                class="profile-avatar"
+                id="profileAvatar"
+                style="cursor: pointer; transition: transform 0.2s"
+            />
+            <span class="text">Traffic And Transport Management</span>
+        </a>
+        <ul class="side-menu top">
+            <li>
+                <a href="../index.php">
+                    <i class="bx bxs-dashboard"></i>
+                    <span class="text">Dashboard</span>
+                </a>
+            </li>
+            <span class="separator">Main</span>
+            
+            <li>
+                <a href="../TM/index.php">
+                    <i class="bx bx-car"></i>
+                    <span class="text">Traffic Monitoring</span>
+                </a>
+            </li>
+            <li>
+                <a href="../RTR/index.php">
+                    <i class="bx bx-directions routing"></i>
+                    <span class="text">Real-Time Road Updates</span>
+                </a>
+            </li>
+            <li>
+                <a href="../AVR/index.php">
+                    <i class="bx bx-bell"></i>
+                    <span class="text">Accident & Violation Reports</span>
+                </a>
+            </li>
+            <li >
+                <a href="../VRD/index.php">
+                    <i class="bx bx-map"></i>
+                    <span class="text">Vehicle Routing & Diversion</span>
+                </a>
+            </li>
+            <li >
+                <a href="../TSC/index.php">
+                    <i class="bx bx-toggle-left"></i>
+                    <span class="text">Traffic Signal Control</span>
+                </a>
+            </li>
+            <li class="active">
+                <a href="../PT/index.php">
+                    <i class="bx bx-train"></i>
+                    <span class="text">Public Transport Sync</span>
+                </a>
+            </li>
+            <li>
+                <a href="../PTS/index.php">
+                    <i class="bx bx-receipt"></i>
+                    <span class="text">Permit & Ticketing System</span>
+                </a>
+            </li>
+        </ul>
+        <ul class="side-menu">
+            <span class="separator">SETTINGS</span>
+            <li>
+                <a href="../Profile.php">
+                    <i class="bx bxs-user-pin"></i>
+                    <span class="text">Profile</span>
+                </a>
+            </li>
+            <li>
+                <a href="../Settings.php">
+                    <i class="bx bxs-cog"></i>
+                    <span class="text">Settings</span>
+                </a>
+            </li>
+            <li>
+                <a href="../logout.php" class="logout">
+                    <i class="bx bxs-log-out-circle"></i>
+                    <span class="text">Logout</span>
+                </a>
+            </li>
+        </ul>
     </section>
     
     <section id="content">

@@ -470,13 +470,13 @@ try {
                     <span class="text">Accident & Violation Reports</span>
                 </a>
             </li>
-            <li class="active">
+            <li >
                 <a href="../VRD/index.php">
                     <i class="bx bx-map"></i>
                     <span class="text">Vehicle Routing & Diversion</span>
                 </a>
             </li>
-            <li>
+            <li class="active">
                 <a href="../TSC/index.php">
                     <i class="bx bx-toggle-left"></i>
                     <span class="text">Traffic Signal Control</span>
