@@ -10,7 +10,7 @@ if (!isset($_SESSION['user_id'])) {
 
 // Database connection
 try {
-    $pdo = getDBConnection(DB_NAME);
+    $pdo = getDBConnection();
 } catch (PDOException $e) {
     die("Database connection failed: " . $e->getMessage());
 }

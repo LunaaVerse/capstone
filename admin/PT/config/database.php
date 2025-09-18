@@ -1,27 +1,42 @@
 <?php
-// Database configuration for TTM
-define('DB_SERVER', 'localhost');
-define('DB_USERNAME', 'ttm_ttm');
-define('DB_PASSWORD', 'Admin123');
-define('DB_NAME', 'ttm_ttm'); 
+// Database configuration for all modules
+$databases = [
+    'ttm_ttm' => [
+        'host' => 'localhost:3307',
+        'name' => 'ttm_ttm',
+        'user' => 'root',
+        'pass' => ''
+    ],
+    
+];
 
-// Attempt to connect to MySQL database
-$conn = mysqli_connect(DB_SERVER, DB_USERNAME, DB_PASSWORD, DB_NAME);
-
-// Check connection
-if($conn === false){
-    die("ERROR: Could not connect. " . mysqli_connect_error());
+// Function to get database connection
+function getDBConnection($dbName) {
+    global $databases;
+    
+    if (!isset($databases[$dbName])) {
+        throw new Exception("Database configuration for '$dbName' not found");
+    }
+    
+    $dbConfig = $databases[$dbName];
+    
+    try {
+        $pdo = new PDO(
+            "mysql:host={$dbConfig['host']};dbname={$dbConfig['name']};charset=utf8mb4", 
+            $dbConfig['user'], 
+            $dbConfig['pass']
+        );
+        $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+        $pdo->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC);
+        return $pdo;
+    } catch(PDOException $e) {
+        die("ERROR: Could not connect to database '$dbName'. " . $e->getMessage());
+    }
 }
 
-// Set charset to utf8mb4 for proper encoding
-mysqli_set_charset($conn, "utf8mb4");
-
-// Create PDO connection for other scripts that need it
-try {
-    $pdo = new PDO("mysql:host=" . DB_SERVER . ";dbname=" . DB_NAME . ";charset=utf8mb4", DB_USERNAME, DB_PASSWORD);
-    $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-    $pdo->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC);
-} catch(PDOException $e) {
-    die("ERROR: Could not connect to database. " . $e->getMessage());
-}
+// For backward compatibility
+define('DB_HOST', 'localhost:3307');
+define('DB_NAME', 'ttm_ttm');
+define('DB_USER', 'root');
+define('DB_PASS', '');
 ?>
