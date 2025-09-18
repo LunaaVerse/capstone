@@ -4,7 +4,7 @@ define('DB_HOST', 'localhost');
 define('DB_USER', 'ttm_ttm'); // Changed from DB_USERNAME to DB_USER
 define('DB_PASS', 'Admin123'); // Changed from DB_PASSWORD to DB_PASS
 define('DB_NAME', 'ttm_ttm'); 
-
+define('DB_SERVER', 'localhost'); // For backward compatibility
 
 // Attempt to connect to MySQL database
 $conn = mysqli_connect(DB_SERVER, DB_USER, DB_PASS, DB_NAME);

@@ -2,10 +2,10 @@
 // Database configuration for all modules
 $databases = [
     'ttm_ttm' => [
-        'host' => 'localhost:3307',
+        'host' => 'localhost',
         'name' => 'ttm_ttm',
-        'user' => 'root',
-        'pass' => ''
+        'user' => 'ttm_ttm',
+        'pass' => 'Admin123'
     ],
     
 ];
@@ -35,8 +35,8 @@ function getDBConnection($dbName) {
 }
 
 // For backward compatibility
-define('DB_HOST', 'localhost:3307');
+define('DB_HOST', 'localhost');
 define('DB_NAME', 'ttm_ttm');
-define('DB_USER', 'root');
-define('DB_PASS', '');
+define('DB_USER', 'ttm_ttm');
+define('DB_PASS', 'Admin123');
 ?>
