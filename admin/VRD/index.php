@@ -8,13 +8,7 @@ if (!isset($_SESSION['user_id'])) {
     exit();
 }
 
-// Database connection
-try {
-    $pdo = new PDO("mysql:host=" . DB_HOST . ";dbname=" . DB_NAME, DB_USER, DB_PASS);
-    $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-} catch (PDOException $e) {
-    die("Database connection failed: " . $e->getMessage());
-}
+// Database connection is now established in database.php, so we don't need to create a new one
 
 // Handle form submissions
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -123,7 +117,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 $routes = [];
 try {
     $stmt = $pdo->query("SELECT * FROM routes ORDER BY created_at DESC");
-    $routes = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    $routes = $stmt->fetchAll();
 } catch (PDOException $e) {
     $error = "Error fetching routes: " . $e->getMessage();
 }
@@ -132,7 +126,7 @@ try {
 $diversions = [];
 try {
     $stmt = $pdo->query("SELECT * FROM diversion_notices ORDER BY created_at DESC");
-    $diversions = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    $diversions = $stmt->fetchAll();
 } catch (PDOException $e) {
     $error = "Error fetching diversions: " . $e->getMessage();
 }
@@ -145,7 +139,7 @@ try {
     $stmt = $pdo->query("SELECT COUNT(*) as count FROM diversion_notices 
                          WHERE status = 'active' 
                          AND (end_date > '$current_date' OR (end_date = '$current_date' AND end_time > '$current_time'))");
-    $result = $stmt->fetch(PDO::FETCH_ASSOC);
+    $result = $stmt->fetch();
     $active_diversions_count = $result['count'];
 } catch (PDOException $e) {
     $error = "Error fetching active diversions count: " . $e->getMessage();
@@ -155,7 +149,7 @@ try {
 $total_routes_count = 0;
 try {
     $stmt = $pdo->query("SELECT COUNT(*) as count FROM routes");
-    $result = $stmt->fetch(PDO::FETCH_ASSOC);
+    $result = $stmt->fetch();
     $total_routes_count = $result['count'];
 } catch (PDOException $e) {
     $error = "Error fetching routes count: " . $e->getMessage();
@@ -746,7 +740,7 @@ try {
                                         <option value="accident">Accident</option>
                                         <option value="event">Event</option>
                                         <option value="weather">Weather</option>
-                                        <option value="emergency">Emergency</option>
+                                        <option value="emergery">Emergency</option>
                                         <option value="other">Other</option>
                                     </select>
                                 </div>
@@ -844,23 +838,18 @@ try {
                                                 <div class="d-flex flex-column align-items-end">
                                                     <span class="status-badge <?php echo $status_class; ?> mb-2"><?php echo $status_text; ?></span>
                                                     <div class="btn-group">
-                                                        <form method="POST" class="d-inline">
-                                                            <input type="hidden" name="diversion_id" value="<?php echo $diversion['diversion_id']; ?>">
-                                                            <?php if ($is_active): ?>
-                                                                <input type="hidden" name="status" value="inactive">
-                                                                <button type="submit" name="update_diversion_status" class="btn btn-sm btn-outline-warning" title="Deactivate">
-                                                                    <i class="bx bx-pause"></i>
+                                                        <?php if (!$is_expired): ?>
+                                                            <form method="POST" class="d-inline">
+                                                                <input type="hidden" name="diversion_id" value="<?php echo $diversion['diversion_id']; ?>">
+                                                                <input type="hidden" name="status" value="<?php echo $diversion['status'] == 'active' ? 'inactive' : 'active'; ?>">
+                                                                <button type="submit" name="update_diversion_status" class="btn btn-sm <?php echo $diversion['status'] == 'active' ? 'btn-warning' : 'btn-success'; ?>">
+                                                                    <?php echo $diversion['status'] == 'active' ? 'Deactivate' : 'Activate'; ?>
                                                                 </button>
-                                                            <?php elseif (!$is_expired): ?>
-                                                                <input type="hidden" name="status" value="active">
-                                                                <button type="submit" name="update_diversion_status" class="btn btn-sm btn-outline-success" title="Activate">
-                                                                    <i class="bx bx-play"></i>
-                                                                </button>
-                                                            <?php endif; ?>
-                                                        </form>
+                                                            </form>
+                                                        <?php endif; ?>
                                                         <form method="POST" class="d-inline" onsubmit="return confirm('Are you sure you want to delete this diversion notice?');">
                                                             <input type="hidden" name="diversion_id" value="<?php echo $diversion['diversion_id']; ?>">
-                                                            <button type="submit" name="delete_diversion" class="btn btn-sm btn-outline-danger" title="Delete">
+                                                            <button type="submit" name="delete_diversion" class="btn btn-sm btn-danger">
                                                                 <i class="bx bx-trash"></i>
                                                             </button>
                                                         </form>
@@ -882,7 +871,7 @@ try {
                     <div class="col-md-5">
                         <div class="routing-form">
                             <h4><i class="bx bx-plus"></i> Create New Route</h4>
-                            <form method="POST" id="routeForm">
+                            <form id="routeForm" method="POST">
                                 <div class="mb-3">
                                     <label class="form-label">Route Name *</label>
                                     <input type="text" class="form-control" name="route_name" placeholder="e.g., Downtown Express Route" required>
@@ -901,7 +890,6 @@ try {
                                 <div class="mb-3">
                                     <label class="form-label">Route Type *</label>
                                     <select class="form-select" name="route_type" required>
-                                        <option value="">Select route type</option>
                                         <option value="primary">Primary Route</option>
                                         <option value="alternate">Alternate Route</option>
                                         <option value="emergency">Emergency Route</option>
@@ -916,14 +904,14 @@ try {
                                     </div>
                                     <div class="col-md-6">
                                         <label class="form-label">Distance (km) *</label>
-                                        <input type="number" class="form-control" name="distance" step="0.1" min="0.1" required>
+                                        <input type="number" step="0.1" class="form-control" name="distance" min="0.1" required>
                                     </div>
                                 </div>
                                 
                                 <div class="mb-3">
                                     <label class="form-label">Status *</label>
                                     <select class="form-select" name="status" required>
-                                        <option value="active" selected>Active</option>
+                                        <option value="active">Active</option>
                                         <option value="inactive">Inactive</option>
                                         <option value="under_maintenance">Under Maintenance</option>
                                     </select>
@@ -956,6 +944,7 @@ try {
                                             <th>From → To</th>
                                             <th>Type</th>
                                             <th>Distance</th>
+                                            <th>Time</th>
                                             <th>Status</th>
                                             <th>Actions</th>
                                         </tr>
@@ -963,46 +952,40 @@ try {
                                     <tbody>
                                         <?php if (empty($routes)): ?>
                                             <tr>
-                                                <td colspan="6" class="text-center">No routes found. Create one using the form on the left.</td>
+                                                <td colspan="7" class="text-center">No routes found. Create one using the form on the left.</td>
                                             </tr>
                                         <?php else: ?>
                                             <?php foreach ($routes as $route): ?>
                                                 <tr>
                                                     <td><?php echo htmlspecialchars($route['route_name']); ?></td>
                                                     <td><?php echo htmlspecialchars($route['start_point']); ?> → <?php echo htmlspecialchars($route['destination']); ?></td>
-                                                    <td>
-                                                        <span class="badge 
-                                                            <?php 
-                                                                if ($route['route_type'] == 'primary') echo 'bg-primary';
-                                                                elseif ($route['route_type'] == 'alternate') echo 'bg-info';
-                                                                elseif ($route['route_type'] == 'emergency') echo 'bg-danger';
-                                                                else echo 'bg-success';
-                                                            ?>">
-                                                            <?php echo ucfirst($route['route_type']); ?>
-                                                        </span>
-                                                    </td>
+                                                    <td><span class="badge bg-<?php 
+                                                        switch($route['route_type']) {
+                                                            case 'primary': echo 'primary'; break;
+                                                            case 'alternate': echo 'info'; break;
+                                                            case 'emergency': echo 'danger'; break;
+                                                            case 'scenic': echo 'success'; break;
+                                                            default: echo 'secondary';
+                                                        }
+                                                    ?>"><?php echo ucfirst($route['route_type']); ?></span></td>
                                                     <td><?php echo $route['distance']; ?> km</td>
-                                                    <td>
-                                                        <span class="badge 
-                                                            <?php 
-                                                                if ($route['status'] == 'active') echo 'bg-success';
-                                                                elseif ($route['status'] == 'inactive') echo 'bg-secondary';
-                                                                else echo 'bg-warning';
-                                                            ?>">
-                                                            <?php echo ucfirst(str_replace('_', ' ', $route['status'])); ?>
-                                                        </span>
-                                                    </td>
+                                                    <td><?php echo $route['travel_time']; ?> min</td>
+                                                    <td><span class="badge bg-<?php 
+                                                        switch($route['status']) {
+                                                            case 'active': echo 'success'; break;
+                                                            case 'inactive': echo 'secondary'; break;
+                                                            case 'under_maintenance': echo 'warning'; break;
+                                                            default: echo 'secondary';
+                                                        }
+                                                    ?>"><?php echo ucfirst(str_replace('_', ' ', $route['status'])); ?></span></td>
                                                     <td>
                                                         <div class="btn-group btn-group-sm">
-                                                            <button class="btn btn-outline-primary" title="View Details" onclick="viewRouteDetails(<?php echo $route['route_id']; ?>)">
-                                                                <i class="bx bx-show"></i>
-                                                            </button>
-                                                            <button class="btn btn-outline-info" title="Edit" onclick="editRoute(<?php echo $route['route_id']; ?>)">
+                                                            <button class="btn btn-outline-primary" onclick="editRoute(<?php echo $route['route_id']; ?>)">
                                                                 <i class="bx bx-edit"></i>
                                                             </button>
-                                                            <form method="POST" class="d-inline">
+                                                            <form method="POST" onsubmit="return confirm('Are you sure you want to delete this route?');">
                                                                 <input type="hidden" name="route_id" value="<?php echo $route['route_id']; ?>">
-                                                                <button type="submit" name="delete_route" class="btn btn-outline-danger" title="Delete" onclick="return confirm('Are you sure you want to delete this route?');">
+                                                                <button type="submit" name="delete_route" class="btn btn-outline-danger">
                                                                     <i class="bx bx-trash"></i>
                                                                 </button>
                                                             </form>
@@ -1023,18 +1006,18 @@ try {
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
     <script>
-        // Tab switching function
+        // Tab navigation
         function openTab(evt, tabName) {
-            // Hide all tab content
-            var tabcontent = document.getElementsByClassName("tab-content");
-            for (var i = 0; i < tabcontent.length; i++) {
-                tabcontent[i].style.display = "none";
+            // Hide all tab contents
+            var tabContents = document.getElementsByClassName("tab-content");
+            for (var i = 0; i < tabContents.length; i++) {
+                tabContents[i].style.display = "none";
             }
             
-            // Remove active class from all buttons
-            var tabbuttons = document.getElementsByClassName("tab-button");
-            for (var i = 0; i < tabbuttons.length; i++) {
-                tabbuttons[i].className = tabbuttons[i].className.replace(" active", "");
+            // Remove active class from all tab buttons
+            var tabButtons = document.getElementsByClassName("tab-button");
+            for (var i = 0; i < tabButtons.length; i++) {
+                tabButtons[i].className = tabButtons[i].className.replace(" active", "");
             }
             
             // Show the specific tab content and add active class to the button
@@ -1044,10 +1027,10 @@ try {
         
         // Toggle expired notices visibility
         function toggleExpiredNotices() {
-            var showExpired = document.getElementById('showExpiredToggle').checked;
-            var expiredNotices = document.querySelectorAll('.expired-notice');
+            const showExpired = document.getElementById('showExpiredToggle').checked;
+            const expiredNotices = document.querySelectorAll('.expired-notice');
             
-            expiredNotices.forEach(function(notice) {
+            expiredNotices.forEach(notice => {
                 notice.style.display = showExpired ? 'block' : 'none';
             });
         }
@@ -1061,79 +1044,147 @@ try {
             document.getElementById('saveBtn').disabled = true;
         }
         
-        // Placeholder functions for route actions
-        function printRoute() {
-            alert('Print route functionality would be implemented here.');
-        }
-        
-        function shareRoute() {
-            alert('Share route functionality would be implemented here.');
-        }
-        
-        function saveRoute() {
-            alert('Save route functionality would be implemented here.');
-        }
-        
-        // Placeholder functions for route management
-        function viewRouteDetails(routeId) {
-            alert('View details for route ID: ' + routeId);
-        }
-        
-        function editRoute(routeId) {
-            alert('Edit route ID: ' + routeId);
-        }
-        
-        // Form submission handlers
-        document.getElementById('quickRouteForm').addEventListener('submit', function(e) {
-            e.preventDefault();
-            alert('Route search functionality would be implemented here.');
-        });
-        
+        // Simulate route finding (would be replaced with actual API calls)
         document.getElementById('routeFinderForm').addEventListener('submit', function(e) {
             e.preventDefault();
-            // Simulate route finding
-            document.getElementById('routeResults').style.display = 'block';
-            document.getElementById('routeOptions').innerHTML = `
-                <div class="list-group-item route-option">
-                    <div class="d-flex w-100 justify-content-between">
-                        <h6 class="mb-1">Primary Route</h6>
-                        <small>15 min</small>
+            
+            // Simulate API call delay
+            setTimeout(() => {
+                const startLocation = document.getElementById('startLocation').value;
+                const destination = document.getElementById('destination').value;
+                
+                // Generate mock route options
+                const routeOptions = document.getElementById('routeOptions');
+                routeOptions.innerHTML = `
+                    <div class="list-group-item">
+                        <div class="d-flex w-100 justify-content-between">
+                            <h6 class="mb-1">Fastest Route</h6>
+                            <small>15 min</small>
+                        </div>
+                        <p class="mb-1">Via Main Street and Highway 1</p>
+                        <small>8.2 km • No traffic delays</small>
+                        <div class="mt-2">
+                            <button class="btn btn-sm btn-primary" onclick="selectRoute(this)">Select</button>
+                        </div>
                     </div>
-                    <p class="mb-1">Main Street → Central Avenue → Destination</p>
-                    <small>5.2 km • Fastest route</small>
-                </div>
-                <div class="list-group-item route-option">
-                    <div class="d-flex w-100 justify-content-between">
-                        <h6 class="mb-1">Alternate Route</h6>
-                        <small>18 min</small>
+                    <div class="list-group-item">
+                        <div class="d-flex w-100 justify-content-between">
+                            <h6 class="mb-1">Shortest Route</h6>
+                            <small>18 min</small>
+                        </div>
+                        <p class="mb-1">Via Oak Avenue and Pine Street</p>
+                        <small>7.5 km • Minor traffic</small>
+                        <div class="mt-2">
+                            <button class="btn btn-sm btn-primary" onclick="selectRoute(this)">Select</button>
+                        </div>
                     </div>
-                    <p class="mb-1">Side Street → Park Road → Destination</p>
-                    <small>5.8 km • Less traffic</small>
-                </div>
-                <div class="list-group-item route-option">
-                    <div class="d-flex w-100 justify-content-between">
-                        <h6 class="mb-1">Scenic Route</h6>
-                        <small>22 min</small>
+                    <div class="list-group-item">
+                        <div class="d-flex w-100 justify-content-between">
+                            <h6 class="mb-1">Scenic Route</h6>
+                            <small>25 min</small>
+                        </div>
+                        <p class="mb-1">Via Riverside Drive and Park Boulevard</p>
+                        <small>9.8 km • Light traffic</small>
+                        <div class="mt-2">
+                            <button class="btn btn-sm btn-primary" onclick="selectRoute(this)">Select</button>
+                        </div>
                     </div>
-                    <p class="mb-1">River Drive → Viewpoint Road → Destination</p>
-                    <small>6.5 km • Most scenic</small>
-                </div>
-            `;
+                `;
+                
+                document.getElementById('routeResults').style.display = 'block';
+            }, 1000);
+        });
+        
+        // Select a route
+        function selectRoute(button) {
+            // Remove any existing active class
+            const items = document.querySelectorAll('.list-group-item');
+            items.forEach(item => item.classList.remove('active'));
+            
+            // Add active class to selected route
+            button.closest('.list-group-item').classList.add('active');
             
             // Enable action buttons
             document.getElementById('printBtn').disabled = false;
             document.getElementById('shareBtn').disabled = false;
             document.getElementById('saveBtn').disabled = false;
+        }
+        
+        // Route actions (placeholder functions)
+        function printRoute() {
+            alert('Print functionality would be implemented here');
+        }
+        
+        function shareRoute() {
+            alert('Share functionality would be implemented here');
+        }
+        
+        function saveRoute() {
+            alert('Save route functionality would be implemented here');
+        }
+        
+        // Edit route (placeholder function)
+        function editRoute(routeId) {
+            alert('Edit route functionality for route ID: ' + routeId + ' would be implemented here');
+        }
+        
+        // Sidebar toggle functionality
+        const allSideMenu = document.querySelectorAll('#sidebar .side-menu.top li a');
+        allSideMenu.forEach(item => {
+            const li = item.parentElement;
+            item.addEventListener('click', function() {
+                allSideMenu.forEach(i => {
+                    i.parentElement.classList.remove('active');
+                });
+                li.classList.add('active');
+            });
         });
         
-        // Auto-hide alerts after 5 seconds
-        setTimeout(function() {
-            var alerts = document.querySelectorAll('.alert');
-            alerts.forEach(function(alert) {
-                var bsAlert = new bootstrap.Alert(alert);
-                bsAlert.close();
-            });
-        }, 5000);
+        // TOGGLE SIDEBAR
+        const menuBar = document.querySelector('#content nav .bx.bx-menu');
+        const sidebar = document.getElementById('sidebar');
+        menuBar.addEventListener('click', function() {
+            sidebar.classList.toggle('hide');
+        });
+        
+        // Profile dropdown functionality
+        const profileBtn = document.getElementById('profile-btn');
+        const dropdownMenu = document.getElementById('dropdown-menu');
+        profileBtn.addEventListener('click', function(e) {
+            e.preventDefault();
+            dropdownMenu.classList.toggle('show');
+        });
+        
+        // Close dropdown when clicking outside
+        window.addEventListener('click', function(e) {
+            if (!profileBtn.contains(e.target) && !dropdownMenu.contains(e.target)) {
+                dropdownMenu.classList.remove('show');
+            }
+        });
+        
+        // Profile avatar animation
+        const profileAvatar = document.getElementById('profileAvatar');
+        profileAvatar.addEventListener('mouseover', function() {
+            this.style.transform = 'scale(1.1)';
+        });
+        profileAvatar.addEventListener('mouseout', function() {
+            this.style.transform = 'scale(1)';
+        });
+        profileAvatar.addEventListener('click', function() {
+            window.location.href = '../Profile.php';
+        });
+        
+        // Initialize page
+        window.onload = function() {
+            // Set today's date for date inputs
+            const today = new Date().toISOString().split('T')[0];
+            document.querySelector('input[name="start_date"]').value = today;
+            document.querySelector('input[name="end_date"]').value = today;
+            
+            // Set default times
+            document.querySelector('input[name="start_time"]').value = '08:00';
+            document.querySelector('input[name="end_time"]').value = '17:00';
+        };
     </script>
 </body>
 </html>

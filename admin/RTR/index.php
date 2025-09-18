@@ -8,7 +8,7 @@ if (!isset($_SESSION['user_id'])) {
     exit();
 }
 
-// Database connection
+// Database connection - FIXED: Using the correct constants from database.php
 try {
     $pdo = new PDO("mysql:host=" . DB_HOST . ";dbname=" . DB_NAME, DB_USER, DB_PASS);
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
@@ -770,7 +770,7 @@ try {
                                             <option value="all">All Statuses</option>
                                             <option value="open">Open</option>
                                             <option value="blocked">Blocked</option>
-                                            <option value="maintenance">Under Maintenance</option>
+                                            <option value='maintenance'>Under Maintenance</option>
                                         </select>
                                     </div>
                                 </div>
@@ -818,40 +818,99 @@ try {
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
-        // Tab navigation
+        // Tab switching functionality
         function openTab(evt, tabName) {
-            // Hide all tab content
-            var tabcontent = document.getElementsByClassName("tab-content");
-            for (var i = 0; i < tabcontent.length; i++) {
-                tabcontent[i].style.display = "none";
+            // Hide all tab contents
+            var tabContents = document.getElementsByClassName("tab-content");
+            for (var i = 0; i < tabContents.length; i++) {
+                tabContents[i].style.display = "none";
             }
             
-            // Remove active class from all buttons
-            var tabbuttons = document.getElementsByClassName("tab-button");
-            for (var i = 0; i < tabbuttons.length; i++) {
-                tabbuttons[i].classList.remove("active");
+            // Remove active class from all tab buttons
+            var tabButtons = document.getElementsByClassName("tab-button");
+            for (var i = 0; i < tabButtons.length; i++) {
+                tabButtons[i].classList.remove("active");
             }
             
-            // Show the specific tab content
+            // Show the specific tab content and add active class to the button
             document.getElementById(tabName).style.display = "block";
-            
-            // Add active class to the button that opened the tab
             evt.currentTarget.classList.add("active");
-            
-            // If opening dashboard, refresh charts
-            if (tabName === 'dashboard') {
-                initCharts();
-            }
         }
-        
+
+        // Edit update functionality
+        function editUpdate(id, location, status, date, time, details, duration) {
+            document.getElementById('edit_update_id').value = id;
+            document.getElementById('edit_location').value = location;
+            document.getElementById('edit_status').value = status;
+            document.getElementById('edit_date').value = date;
+            document.getElementById('edit_time').value = time;
+            document.getElementById('edit_details').value = details;
+            document.getElementById('edit_duration').value = duration;
+            
+            var editModal = new bootstrap.Modal(document.getElementById('editModal'));
+            editModal.show();
+        }
+
+        // Filter and search functionality
+        function filterRoads() {
+            const searchText = document.getElementById('searchLocation').value.toLowerCase();
+            const statusFilter = document.getElementById('statusFilter').value;
+            const roadUpdates = document.querySelectorAll('#notificationContainer .road-status-card');
+            
+            roadUpdates.forEach(card => {
+                const location = card.getAttribute('data-location');
+                const status = card.getAttribute('data-status');
+                
+                const matchesSearch = location.includes(searchText);
+                const matchesStatus = statusFilter === 'all' || status === statusFilter;
+                
+                if (matchesSearch && matchesStatus) {
+                    card.style.display = 'block';
+                } else {
+                    card.style.display = 'none';
+                }
+            });
+        }
+
+        function filterByStatus(status) {
+            document.getElementById('statusFilter').value = status;
+            filterRoads();
+        }
+
+        function sortBy(criteria) {
+            const container = document.getElementById('notificationContainer');
+            const cards = Array.from(container.querySelectorAll('.road-status-card'));
+            
+            cards.sort((a, b) => {
+                if (criteria === 'newest') {
+                    return b.getAttribute('data-date') - a.getAttribute('data-date');
+                } else if (criteria === 'oldest') {
+                    return a.getAttribute('data-date') - b.getAttribute('data-date');
+                } else if (criteria === 'location') {
+                    return a.getAttribute('data-location').localeCompare(b.getAttribute('data-location'));
+                } else if (criteria === 'status') {
+                    return a.getAttribute('data-status').localeCompare(b.getAttribute('data-status'));
+                }
+                return 0;
+            });
+            
+            // Clear container and append sorted cards
+            container.innerHTML = '';
+            cards.forEach(card => container.appendChild(card));
+        }
+
+        function refreshNotifications() {
+            location.reload();
+        }
+
         // Initialize charts
-        function initCharts() {
+        document.addEventListener('DOMContentLoaded', function() {
             // Status Distribution Chart
-            const statusDistributionCtx = document.getElementById('statusDistributionChart').getContext('2d');
-            const statusDistributionChart = new Chart(statusDistributionCtx, {
+            const statusCtx = document.getElementById('statusDistributionChart').getContext('2d');
+            const statusChart = new Chart(statusCtx, {
                 type: 'doughnut',
                 data: {
-                    labels: ['Open Roads', 'Blocked Roads', 'Under Maintenance'],
+                    labels: ['Open', 'Blocked', 'Under Maintenance'],
                     datasets: [{
                         data: [
                             <?php echo $stats['open_roads']; ?>,
@@ -875,16 +934,16 @@ try {
                     }
                 }
             });
-            
-            // Updates Timeline Chart (mock data for now)
-            const updatesTimelineCtx = document.getElementById('updatesTimelineChart').getContext('2d');
-            const updatesTimelineChart = new Chart(updatesTimelineCtx, {
+
+            // Updates Timeline Chart (simplified version)
+            const timelineCtx = document.getElementById('updatesTimelineChart').getContext('2d');
+            const timelineChart = new Chart(timelineCtx, {
                 type: 'line',
                 data: {
-                    labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
+                    labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
                     datasets: [{
                         label: 'Road Updates',
-                        data: [12, 19, 8, 15, 22, 18, 14],
+                        data: [12, 19, 8, 15, 24, 18],
                         borderColor: '#1d3557',
                         tension: 0.1,
                         fill: false
@@ -892,11 +951,6 @@ try {
                 },
                 options: {
                     responsive: true,
-                    plugins: {
-                        legend: {
-                            position: 'bottom'
-                        }
-                    },
                     scales: {
                         y: {
                             beginAtZero: true
@@ -904,108 +958,6 @@ try {
                     }
                 }
             });
-        }
-        
-        // Edit road update
-        function editUpdate(id, location, status, date, time, details, duration) {
-            document.getElementById('edit_update_id').value = id;
-            document.getElementById('edit_location').value = location;
-            document.getElementById('edit_status').value = status;
-            document.getElementById('edit_date').value = date;
-            document.getElementById('edit_time').value = time;
-            document.getElementById('edit_details').value = details;
-            document.getElementById('edit_duration').value = duration;
-            
-            // Show the modal
-            var editModal = new bootstrap.Modal(document.getElementById('editModal'));
-            editModal.show();
-        }
-        
-        // Filter roads in notification panel
-        function filterRoads() {
-            const searchText = document.getElementById('searchLocation').value.toLowerCase();
-            const statusFilter = document.getElementById('statusFilter').value;
-            
-            const roadCards = document.querySelectorAll('#notificationContainer .road-status-card');
-            
-            roadCards.forEach(card => {
-                const location = card.getAttribute('data-location');
-                const status = card.getAttribute('data-status');
-                
-                const matchesSearch = location.includes(searchText);
-                const matchesStatus = statusFilter === 'all' || status === statusFilter;
-                
-                if (matchesSearch && matchesStatus) {
-                    card.style.display = 'block';
-                } else {
-                    card.style.display = 'none';
-                }
-            });
-        }
-        
-        // Sort roads in notification panel
-        function sortBy(criteria) {
-            const container = document.getElementById('notificationContainer');
-            const roadCards = Array.from(container.querySelectorAll('.road-status-card'));
-            
-            roadCards.sort((a, b) => {
-                if (criteria === 'newest') {
-                    return parseInt(b.getAttribute('data-date')) - parseInt(a.getAttribute('data-date'));
-                } else if (criteria === 'oldest') {
-                    return parseInt(a.getAttribute('data-date')) - parseInt(b.getAttribute('data-date'));
-                } else if (criteria === 'location') {
-                    return a.getAttribute('data-location').localeCompare(b.getAttribute('data-location'));
-                } else if (criteria === 'status') {
-                    return a.getAttribute('data-status').localeCompare(b.getAttribute('data-status'));
-                }
-                return 0;
-            });
-            
-            // Remove all cards and re-add in sorted order
-            roadCards.forEach(card => container.appendChild(card));
-        }
-        
-        // Filter by status from dropdown
-        function filterByStatus(status) {
-            document.getElementById('statusFilter').value = status;
-            filterRoads();
-        }
-        
-        // Refresh notifications
-        function refreshNotifications() {
-            location.reload();
-        }
-        
-        // Initialize charts when page loads
-        document.addEventListener('DOMContentLoaded', function() {
-            initCharts();
-            
-            // Auto-hide alerts after 5 seconds
-            setTimeout(function() {
-                const alerts = document.querySelectorAll('.alert');
-                alerts.forEach(alert => {
-                    const bsAlert = new bootstrap.Alert(alert);
-                    bsAlert.close();
-                });
-            }, 5000);
-            
-            // Profile dropdown functionality
-            const profileBtn = document.getElementById('profile-btn');
-            const dropdownMenu = document.getElementById('dropdown-menu');
-            
-            if (profileBtn && dropdownMenu) {
-                profileBtn.addEventListener('click', function(e) {
-                    e.preventDefault();
-                    dropdownMenu.style.display = dropdownMenu.style.display === 'block' ? 'none' : 'block';
-                });
-                
-                // Close dropdown when clicking outside
-                document.addEventListener('click', function(e) {
-                    if (!profileBtn.contains(e.target) && !dropdownMenu.contains(e.target)) {
-                        dropdownMenu.style.display = 'none';
-                    }
-                });
-            }
         });
     </script>
 </body>
