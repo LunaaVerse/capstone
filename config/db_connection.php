@@ -1,9 +1,9 @@
 <?php
 // Database configuration for TTM
-define('DB_SERVER', 'localhost:3307');
-define('DB_USERNAME', 'root');
-define('DB_PASSWORD', '');
-define('DB_NAME', 'ttm');
+define('DB_SERVER', 'localhost');
+define('DB_USERNAME', 'ttm_ttm');
+define('DB_PASSWORD', 'Admin123');
+define('DB_NAME', 'ttm_ttm'); 
 
 // Attempt to connect to MySQL database
 $conn = mysqli_connect(DB_SERVER, DB_USERNAME, DB_PASSWORD, DB_NAME);
