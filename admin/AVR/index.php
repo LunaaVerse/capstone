@@ -1,6 +1,6 @@
 <?php
 session_start();
-require_once '../config/database.php'; // Database connection file
+require_once 'config/database.php'; // Database connection file
 
 // Check if user is logged in
 if (!isset($_SESSION['user_id'])) {
@@ -862,255 +862,137 @@ try {
                         <div class="report-form">
                             <h4><i class="bx bx-check-shield"></i> Admin Review Panel</h4>
                             
-                            <ul class="nav nav-tabs" id="adminTabs" role="tablist">
-                                <li class="nav-item" role="presentation">
-                                    <button class="nav-link active" id="pending-tab" data-bs-toggle="tab" data-bs-target="#pending" type="button" role="tab" aria-controls="pending" aria-selected="true">
-                                        Pending Review <span class="badge bg-warning"><?php echo $stats['pending_reports']; ?></span>
-                                    </button>
-                                </li>
-                                <li class="nav-item" role="presentation">
-                                    <button class="nav-link" id="verified-tab" data-bs-toggle="tab" data-bs-target="#verified" type="button" role="tab" aria-controls="verified" aria-selected="false">
-                                        Verified Reports <span class="badge bg-success"><?php echo $stats['verified_reports']; ?></span>
-                                    </button>
-                                </li>
-                                <li class="nav-item" role="presentation">
-                                    <button class="nav-link" id="invalid-tab" data-bs-toggle="tab" data-bs-target="#invalid" type="button" role="tab" aria-controls="invalid" aria-selected="false">
-                                        Invalid Reports <span class="badge bg-danger"><?php echo $stats['invalid_reports']; ?></span>
-                                    </button>
-                                </li>
-                            </ul>
+                            <div class="alert alert-warning">
+                                <i class="bx bx-info-circle"></i> You have <strong><?php echo $stats['pending_reports']; ?></strong> reports pending review.
+                            </div>
                             
-                            <div class="tab-content p-3 border border-top-0" id="adminTabContent">
-                                <!-- Pending Reports Tab -->
-                                <div class="tab-pane fade show active" id="pending" role="tabpanel" aria-labelledby="pending-tab">
-                                    <?php 
-                                    $pending_reports = array_filter($reports, function($report) {
-                                        return $report['status'] === 'pending';
-                                    });
-                                    ?>
-                                    
-                                    <?php if (empty($pending_reports)): ?>
-                                        <div class="alert alert-info">
-                                            <i class="bx bx-info-circle"></i> No pending reports to review.
-                                        </div>
-                                    <?php else: ?>
-                                        <?php foreach ($pending_reports as $report): ?>
-                                            <div class="report-card p-3 status-pending mb-3">
-                                                <div class="d-flex justify-content-between align-items-start">
-                                                    <div class="flex-grow-1">
-                                                        <h5><?php echo htmlspecialchars($report['report_type']); ?></h5>
-                                                        <p class="mb-1"><strong>Reported by:</strong> <?php echo htmlspecialchars($report['full_name']); ?> (<?php echo htmlspecialchars($report['username']); ?>)</p>
-                                                        <p class="mb-1"><strong>Contact:</strong> <?php echo htmlspecialchars($report['contact_number']); ?></p>
-                                                        <p class="mb-1"><strong>Location:</strong> <?php echo htmlspecialchars($report['location']); ?></p>
-                                                        <p class="mb-1"><strong>Date/Time:</strong> <?php echo $report['report_date'] . ' ' . $report['report_time']; ?></p>
-                                                        <p class="mb-1"><strong>Priority:</strong> 
-                                                            <span class="badge bg-<?php 
-                                                                if ($report['priority_level'] === 'low') echo 'secondary';
-                                                                elseif ($report['priority_level'] === 'medium') echo 'info';
-                                                                elseif ($report['priority_level'] === 'high') echo 'warning';
-                                                                else echo 'danger';
-                                                            ?>">
-                                                                <?php echo ucfirst($report['priority_level']); ?>
-                                                            </span>
-                                                        </p>
-                                                        <p class="mb-2"><strong>Description:</strong> <?php echo htmlspecialchars($report['description']); ?></p>
-                                                        
-                                                        <?php if ($report['attachment_count'] > 0): ?>
-                                                            <p class="mb-2">
-                                                                <i class="bx bx-paperclip"></i> 
-                                                                <a href="#" onclick="viewAttachments('<?php echo $report['report_id']; ?>')">View Attachments (<?php echo $report['attachment_count']; ?>)</a>
-                                                            </p>
-                                                        <?php endif; ?>
-                                                        
-                                                        <small class="text-muted">Report ID: <?php echo $report['report_id']; ?> | Submitted: <?php echo date('M j, Y g:i A', strtotime($report['created_at'])); ?></small>
-                                                    </div>
-                                                    <div class="ms-3">
-                                                        <button class="btn btn-sm btn-success" onclick="updateReportStatus('<?php echo $report['report_id']; ?>', 'verified')">
-                                                            <i class="bx bx-check"></i> Verify
-                                                        </button>
-                                                        <button class="btn btn-sm btn-danger mt-1" onclick="updateReportStatus('<?php echo $report['report_id']; ?>', 'invalid')">
-                                                            <i class="bx bx-x"></i> Reject
-                                                        </button>
-                                                        <button class="btn btn-sm btn-outline-primary mt-1" onclick="viewReportDetails('<?php echo $report['report_id']; ?>')">
-                                                            <i class="bx bx-show"></i> Details
-                                                        </button>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        <?php endforeach; ?>
-                                    <?php endif; ?>
+                            <div class="row mb-3">
+                                <div class="col-md-6">
+                                    <input type="text" class="form-control" placeholder="Search reports..." id="adminSearch">
                                 </div>
-                                
-                                <!-- Verified Reports Tab -->
-                                <div class="tab-pane fade" id="verified" role="tabpanel" aria-labelledby="verified-tab">
-                                    <?php 
-                                    $verified_reports = array_filter($reports, function($report) {
-                                        return $report['status'] === 'verified';
-                                    });
-                                    ?>
-                                    
-                                    <?php if (empty($verified_reports)): ?>
-                                        <div class="alert alert-info">
-                                            <i class="bx bx-info-circle"></i> No verified reports.
-                                        </div>
-                                    <?php else: ?>
-                                        <?php foreach ($verified_reports as $report): ?>
-                                            <div class="report-card p-3 status-verified mb-3">
-                                                <div class="d-flex justify-content-between align-items-start">
-                                                    <div class="flex-grow-1">
-                                                        <h5><?php echo htmlspecialchars($report['report_type']); ?></h5>
-                                                        <p class="mb-1"><strong>Reported by:</strong> <?php echo htmlspecialchars($report['full_name']); ?> (<?php echo htmlspecialchars($report['username']); ?>)</p>
-                                                        <p class="mb-1"><strong>Contact:</strong> <?php echo htmlspecialchars($report['contact_number']); ?></p>
-                                                        <p class="mb-1"><strong>Location:</strong> <?php echo htmlspecialchars($report['location']); ?></p>
-                                                        <p class="mb-1"><strong>Date/Time:</strong> <?php echo $report['report_date'] . ' ' . $report['report_time']; ?></p>
-                                                        <p class="mb-1"><strong>Priority:</strong> 
-                                                            <span class="badge bg-<?php 
-                                                                if ($report['priority_level'] === 'low') echo 'secondary';
-                                                                elseif ($report['priority_level'] === 'medium') echo 'info';
-                                                                elseif ($report['priority_level'] === 'high') echo 'warning';
-                                                                else echo 'danger';
-                                                            ?>">
-                                                                <?php echo ucfirst($report['priority_level']); ?>
-                                                            </span>
-                                                        </p>
-                                                        <p class="mb-2"><strong>Description:</strong> <?php echo htmlspecialchars($report['description']); ?></p>
-                                                        
-                                                        <?php if ($report['attachment_count'] > 0): ?>
-                                                            <p class="mb-2">
-                                                                <i class="bx bx-paperclip"></i> 
-                                                                <a href="#" onclick="viewAttachments('<?php echo $report['report_id']; ?>')">View Attachments (<?php echo $report['attachment_count']; ?>)</a>
-                                                            </p>
-                                                        <?php endif; ?>
-                                                        
-                                                        <small class="text-muted">Report ID: <?php echo $report['report_id']; ?> | Submitted: <?php echo date('M j, Y g:i A', strtotime($report['created_at'])); ?></small>
-                                                    </div>
-                                                    <div class="ms-3">
-                                                        <button class="btn btn-sm btn-danger" onclick="updateReportStatus('<?php echo $report['report_id']; ?>', 'invalid')">
-                                                            <i class="bx bx-x"></i> Mark Invalid
-                                                        </button>
-                                                        <button class="btn btn-sm btn-outline-primary mt-1" onclick="viewReportDetails('<?php echo $report['report_id']; ?>')">
-                                                            <i class="bx bx-show"></i> Details
-                                                        </button>
-                                                    </div>
-                                                </div>
-                                                
-                                                <!-- Status History -->
-                                                <?php if (isset($status_history[$report['report_id']])): ?>
-                                                <div class="history-timeline mt-3">
-                                                    <?php foreach ($status_history[$report['report_id']] as $history): ?>
-                                                    <div class="history-item">
-                                                        <div class="history-content">
-                                                            <strong><?php echo $history['full_name']; ?></strong> changed status from 
-                                                            <span class="badge bg-<?php 
-                                                                if ($history['old_status'] === 'pending') echo 'warning';
-                                                                elseif ($history['old_status'] === 'verified') echo 'success';
-                                                                else echo 'danger';
-                                                            ?>"><?php echo ucfirst($history['old_status']); ?></span> to 
-                                                            <span class="badge bg-<?php 
-                                                                if ($history['new_status'] === 'pending') echo 'warning';
-                                                                elseif ($history['new_status'] === 'verified') echo 'success';
-                                                                else echo 'danger';
-                                                            ?>"><?php echo ucfirst($history['new_status']); ?></span>
-                                                            <br>
-                                                            <small class="text-muted"><?php echo date('M j, Y g:i A', strtotime($history['changed_at'])); ?></small>
-                                                            <?php if (!empty($history['change_reason'])): ?>
-                                                                <p class="mt-1 mb-0"><strong>Reason:</strong> <?php echo htmlspecialchars($history['change_reason']); ?></p>
-                                                            <?php endif; ?>
-                                                        </div>
-                                                    </div>
-                                                    <?php endforeach; ?>
-                                                </div>
-                                                <?php endif; ?>
-                                            </div>
-                                        <?php endforeach; ?>
-                                    <?php endif; ?>
+                                <div class="col-md-3">
+                                    <select class="form-select" id="statusFilter">
+                                        <option value="">All Statuses</option>
+                                        <option value="pending">Pending</option>
+                                        <option value="verified">Verified</option>
+                                        <option value="invalid">Invalid</option>
+                                    </select>
                                 </div>
-                                
-                                <!-- Invalid Reports Tab -->
-                                <div class="tab-pane fade" id="invalid" role="tabpanel" aria-labelledby="invalid-tab">
-                                    <?php 
-                                    $invalid_reports = array_filter($reports, function($report) {
-                                        return $report['status'] === 'invalid';
-                                    });
-                                    ?>
-                                    
-                                    <?php if (empty($invalid_reports)): ?>
-                                        <div class="alert alert-info">
-                                            <i class="bx bx-info-circle"></i> No invalid reports.
-                                        </div>
-                                    <?php else: ?>
-                                        <?php foreach ($invalid_reports as $report): ?>
-                                            <div class="report-card p-3 status-invalid mb-3">
-                                                <div class="d-flex justify-content-between align-items-start">
-                                                    <div class="flex-grow-1">
-                                                        <h5><?php echo htmlspecialchars($report['report_type']); ?></h5>
-                                                        <p class="mb-1"><strong>Reported by:</strong> <?php echo htmlspecialchars($report['full_name']); ?> (<?php echo htmlspecialchars($report['username']); ?>)</p>
-                                                        <p class="mb-1"><strong>Contact:</strong> <?php echo htmlspecialchars($report['contact_number']); ?></p>
-                                                        <p class="mb-1"><strong>Location:</strong> <?php echo htmlspecialchars($report['location']); ?></p>
-                                                        <p class="mb-1"><strong>Date/Time:</strong> <?php echo $report['report_date'] . ' ' . $report['report_time']; ?></p>
-                                                        <p class="mb-1"><strong>Priority:</strong> 
-                                                            <span class="badge bg-<?php 
-                                                                if ($report['priority_level'] === 'low') echo 'secondary';
-                                                                elseif ($report['priority_level'] === 'medium') echo 'info';
-                                                                elseif ($report['priority_level'] === 'high') echo 'warning';
-                                                                else echo 'danger';
-                                                            ?>">
-                                                                <?php echo ucfirst($report['priority_level']); ?>
-                                                            </span>
-                                                        </p>
-                                                        <p class="mb-2"><strong>Description:</strong> <?php echo htmlspecialchars($report['description']); ?></p>
-                                                        
-                                                        <?php if ($report['attachment_count'] > 0): ?>
-                                                            <p class="mb-2">
-                                                                <i class="bx bx-paperclip"></i> 
-                                                                <a href="#" onclick="viewAttachments('<?php echo $report['report_id']; ?>')">View Attachments (<?php echo $report['attachment_count']; ?>)</a>
-                                                            </p>
-                                                        <?php endif; ?>
-                                                        
-                                                        <small class="text-muted">Report ID: <?php echo $report['report_id']; ?> | Submitted: <?php echo date('M j, Y g:i A', strtotime($report['created_at'])); ?></small>
-                                                    </div>
-                                                    <div class="ms-3">
-                                                        <button class="btn btn-sm btn-success" onclick="updateReportStatus('<?php echo $report['report_id']; ?>', 'verified')">
-                                                            <i class="bx bx-check"></i> Mark Verified
-                                                        </button>
-                                                        <button class="btn btn-sm btn-outline-primary mt-1" onclick="viewReportDetails('<?php echo $report['report_id']; ?>')">
-                                                            <i class="bx bx-show"></i> Details
-                                                        </button>
-                                                    </div>
-                                                </div>
-                                                
-                                                <!-- Status History -->
-                                                <?php if (isset($status_history[$report['report_id']])): ?>
-                                                <div class="history-timeline mt-3">
-                                                    <?php foreach ($status_history[$report['report_id']] as $history): ?>
-                                                    <div class="history-item">
-                                                        <div class="history-content">
-                                                            <strong><?php echo $history['full_name']; ?></strong> changed status from 
-                                                            <span class="badge bg-<?php 
-                                                                if ($history['old_status'] === 'pending') echo 'warning';
-                                                                elseif ($history['old_status'] === 'verified') echo 'success';
-                                                                else echo 'danger';
-                                                            ?>"><?php echo ucfirst($history['old_status']); ?></span> to 
-                                                            <span class="badge bg-<?php 
-                                                                if ($history['new_status'] === 'pending') echo 'warning';
-                                                                elseif ($history['new_status'] === 'verified') echo 'success';
-                                                                else echo 'danger';
-                                                            ?>"><?php echo ucfirst($history['new_status']); ?></span>
-                                                            <br>
-                                                            <small class="text-muted"><?php echo date('M j, Y g:i A', strtotime($history['changed_at'])); ?></small>
-                                                            <?php if (!empty($history['change_reason'])): ?>
-                                                                <p class="mt-1 mb-0"><strong>Reason:</strong> <?php echo htmlspecialchars($history['change_reason']); ?></p>
-                                                            <?php endif; ?>
-                                                        </div>
-                                                    </div>
-                                                    <?php endforeach; ?>
-                                                </div>
-                                                <?php endif; ?>
-                                            </div>
-                                        <?php endforeach; ?>
-                                    <?php endif; ?>
+                                <div class="col-md-3">
+                                    <button class="btn btn-primary w-100" onclick="filterAdminReports()">
+                                        <i class="bx bx-filter"></i> Filter Reports
+                                    </button>
                                 </div>
                             </div>
+                            
+                            <?php if (empty($reports)): ?>
+                                <div class="alert alert-info">
+                                    <i class="bx bx-info-circle"></i> No reports found in the system.
+                                </div>
+                            <?php else: ?>
+                                <div class="report-table">
+                                    <?php foreach ($reports as $report): ?>
+                                        <div class="report-card p-3 status-<?php echo $report['status']; ?> mb-3">
+                                            <div class="d-flex justify-content-between align-items-start">
+                                                <div class="flex-grow-1">
+                                                    <h5><?php echo htmlspecialchars($report['report_type']); ?> 
+                                                        <span class="badge bg-<?php 
+                                                            if ($report['status'] === 'pending') echo 'warning';
+                                                            elseif ($report['status'] === 'verified') echo 'success';
+                                                            else echo 'danger';
+                                                        ?> ms-2">
+                                                            <?php echo ucfirst($report['status']); ?>
+                                                        </span>
+                                                    </h5>
+                                                    <p class="mb-1"><strong>Reported by:</strong> <?php echo htmlspecialchars($report['full_name']); ?> (<?php echo htmlspecialchars($report['username']); ?>)</p>
+                                                    <p class="mb-1"><strong>Contact:</strong> <?php echo htmlspecialchars($report['contact_number']); ?></p>
+                                                    <p class="mb-1"><strong>Location:</strong> <?php echo htmlspecialchars($report['location']); ?></p>
+                                                    <p class="mb-1"><strong>Date/Time:</strong> <?php echo $report['report_date'] . ' ' . $report['report_time']; ?></p>
+                                                    <p class="mb-1"><strong>Priority:</strong> 
+                                                        <span class="badge bg-<?php 
+                                                            if ($report['priority_level'] === 'low') echo 'secondary';
+                                                            elseif ($report['priority_level'] === 'medium') echo 'info';
+                                                            elseif ($report['priority_level'] === 'high') echo 'warning';
+                                                            else echo 'danger';
+                                                        ?>">
+                                                            <?php echo ucfirst($report['priority_level']); ?>
+                                                        </span>
+                                                    </p>
+                                                    <p class="mb-2"><strong>Description:</strong> <?php echo htmlspecialchars($report['description']); ?></p>
+                                                    
+                                                    <?php if ($report['attachment_count'] > 0): ?>
+                                                        <p class="mb-2">
+                                                            <i class="bx bx-paperclip"></i> 
+                                                            <a href="#" onclick="viewAttachments('<?php echo $report['report_id']; ?>')">View Attachments (<?php echo $report['attachment_count']; ?>)</a>
+                                                        </p>
+                                                    <?php endif; ?>
+                                                    
+                                                    <small class="text-muted">Report ID: <?php echo $report['report_id']; ?> | Submitted: <?php echo date('M j, Y g:i A', strtotime($report['created_at'])); ?></small>
+                                                </div>
+                                                <div class="ms-3">
+                                                    <button class="btn btn-sm btn-outline-primary" onclick="viewReportDetails('<?php echo $report['report_id']; ?>')">
+                                                        <i class="bx bx-show"></i> Details
+                                                    </button>
+                                                </div>
+                                            </div>
+                                            
+                                            <!-- Admin Action Form -->
+                                            <?php if ($report['status'] === 'pending'): ?>
+                                            <div class="mt-3 p-3 bg-light rounded">
+                                                <h6><i class="bx bx-edit"></i> Update Report Status</h6>
+                                                <form method="POST" class="row g-3 align-items-end">
+                                                    <input type="hidden" name="report_id" value="<?php echo $report['report_id']; ?>">
+                                                    <div class="col-md-3">
+                                                        <label class="form-label">New Status</label>
+                                                        <select class="form-select" name="status" required>
+                                                            <option value="verified">Verified</option>
+                                                            <option value="invalid">Invalid</option>
+                                                        </select>
+                                                    </div>
+                                                    <div class="col-md-6">
+                                                        <label class="form-label">Notes</label>
+                                                        <input type="text" class="form-control" name="admin_notes" placeholder="Reason for status change...">
+                                                    </div>
+                                                    <div class="col-md-3">
+                                                        <button type="submit" name="update_status" class="btn btn-primary w-100">
+                                                            <i class="bx bx-check"></i> Update Status
+                                                        </button>
+                                                    </div>
+                                                </form>
+                                            </div>
+                                            <?php endif; ?>
+                                            
+                                            <!-- Status History -->
+                                            <?php if (isset($status_history[$report['report_id']])): ?>
+                                            <div class="history-timeline mt-3">
+                                                <?php foreach ($status_history[$report['report_id']] as $history): ?>
+                                                <div class="history-item">
+                                                    <div class="history-content">
+                                                        <strong><?php echo $history['full_name']; ?></strong> changed status from 
+                                                        <span class="badge bg-<?php 
+                                                            if ($history['old_status'] === 'pending') echo 'warning';
+                                                            elseif ($history['old_status'] === 'verified') echo 'success';
+                                                            else echo 'danger';
+                                                        ?>"><?php echo ucfirst($history['old_status']); ?></span> to 
+                                                        <span class="badge bg-<?php 
+                                                            if ($history['new_status'] === 'pending') echo 'warning';
+                                                            elseif ($history['new_status'] === 'verified') echo 'success';
+                                                            else echo 'danger';
+                                                        ?>"><?php echo ucfirst($history['new_status']); ?></span>
+                                                        <br>
+                                                        <small class="text-muted"><?php echo date('M j, Y g:i A', strtotime($history['changed_at'])); ?></small>
+                                                        <?php if (!empty($history['change_reason'])): ?>
+                                                            <p class="mt-1 mb-0"><strong>Reason:</strong> <?php echo htmlspecialchars($history['change_reason']); ?></p>
+                                                        <?php endif; ?>
+                                                    </div>
+                                                </div>
+                                                <?php endforeach; ?>
+                                            </div>
+                                            <?php endif; ?>
+                                        </div>
+                                    <?php endforeach; ?>
+                                </div>
+                            <?php endif; ?>
                         </div>
                     </div>
                 </div>
@@ -1119,52 +1001,16 @@ try {
         </main>
     </section>
 
-    <!-- Status Update Modal -->
-    <div class="modal fade" id="statusModal" tabindex="-1" aria-labelledby="statusModalLabel" aria-hidden="true">
-        <div class="modal-dialog">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title" id="statusModalLabel">Update Report Status</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                </div>
-                <form method="POST" id="statusForm">
-                    <div class="modal-body">
-                        <input type="hidden" name="report_id" id="reportId">
-                        <input type="hidden" name="update_status" value="1">
-                        
-                        <div class="mb-3">
-                            <label class="form-label">Status</label>
-                            <select class="form-select" name="status" id="statusSelect" required>
-                                <option value="pending">Pending</option>
-                                <option value="verified">Verified</option>
-                                <option value="invalid">Invalid</option>
-                            </select>
-                        </div>
-                        
-                        <div class="mb-3">
-                            <label class="form-label">Notes (Optional)</label>
-                            <textarea class="form-control" name="admin_notes" rows="3" placeholder="Add any notes about this status change"></textarea>
-                        </div>
-                    </div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                        <button type="submit" class="btn btn-primary">Update Status</button>
-                    </div>
-                </form>
-            </div>
-        </div>
-    </div>
-
-    <!-- Report Details Modal -->
-    <div class="modal fade" id="detailsModal" tabindex="-1" aria-labelledby="detailsModalLabel" aria-hidden="true">
+    <!-- View Report Details Modal -->
+    <div class="modal fade" id="reportDetailsModal" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog modal-lg">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title" id="detailsModalLabel">Report Details</h5>
+                    <h5 class="modal-title">Report Details</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
-                <div class="modal-body" id="reportDetails">
-                    <!-- Details will be loaded here via AJAX -->
+                <div class="modal-body" id="reportDetailsContent">
+                    <!-- Content will be loaded via AJAX -->
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
@@ -1173,16 +1019,16 @@ try {
         </div>
     </div>
 
-    <!-- Attachments Modal -->
-    <div class="modal fade" id="attachmentsModal" tabindex="-1" aria-labelledby="attachmentsModalLabel" aria-hidden="true">
+    <!-- View Attachments Modal -->
+    <div class="modal fade" id="attachmentsModal" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog modal-lg">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title" id="attachmentsModalLabel">Report Attachments</h5>
+                    <h5 class="modal-title">Report Attachments</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body" id="attachmentsContent">
-                    <!-- Attachments will be loaded here via AJAX -->
+                    <!-- Content will be loaded via AJAX -->
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
@@ -1213,14 +1059,9 @@ try {
             // Show the specific tab content and add active class to the button
             document.getElementById(tabName).style.display = "block";
             evt.currentTarget.className += " active";
-            
-            // If dashboard tab is opened, refresh charts
-            if (tabName === 'dashboard') {
-                renderCharts();
-            }
         }
         
-        // Image preview for file upload
+        // Image preview for report form
         document.getElementById('reportImage').addEventListener('change', function(e) {
             const file = e.target.files[0];
             if (file) {
@@ -1234,48 +1075,43 @@ try {
             }
         });
         
-        // Update report status (admin function)
-        function updateReportStatus(reportId, status) {
-            document.getElementById('reportId').value = reportId;
-            document.getElementById('statusSelect').value = status;
-            
-            const modal = new bootstrap.Modal(document.getElementById('statusModal'));
-            modal.show();
-        }
-        
         // View report details
         function viewReportDetails(reportId) {
-            // In a real application, this would fetch data via AJAX
+            // In a real application, you would fetch this data via AJAX
             // For this example, we'll just show a placeholder
-            document.getElementById('reportDetails').innerHTML = `
-                <div class="text-center">
-                    <p>Loading report details for ID: ${reportId}</p>
-                    <div class="spinner-border" role="status">
+            document.getElementById('reportDetailsContent').innerHTML = `
+                <div class="text-center py-4">
+                    <div class="spinner-border text-primary" role="status">
                         <span class="visually-hidden">Loading...</span>
                     </div>
+                    <p class="mt-2">Loading report details...</p>
                 </div>
             `;
             
-            const modal = new bootstrap.Modal(document.getElementById('detailsModal'));
+            // Show the modal
+            const modal = new bootstrap.Modal(document.getElementById('reportDetailsModal'));
             modal.show();
             
             // Simulate AJAX call
             setTimeout(() => {
-                document.getElementById('reportDetails').innerHTML = `
+                document.getElementById('reportDetailsContent').innerHTML = `
                     <h4>Report Details</h4>
                     <p><strong>Report ID:</strong> ${reportId}</p>
-                    <p><strong>Type:</strong> Traffic Violation</p>
-                    <p><strong>Location:</strong> Main Street & 1st Avenue</p>
-                    <p><strong>Date/Time:</strong> ${new Date().toLocaleString()}</p>
                     <p><strong>Status:</strong> <span class="badge bg-warning">Pending</span></p>
+                    <p><strong>Type:</strong> Traffic Violation</p>
+                    <p><strong>Location:</strong> Main Street & 5th Avenue</p>
+                    <p><strong>Date/Time:</strong> ${new Date().toLocaleDateString()} 14:30</p>
                     <p><strong>Priority:</strong> <span class="badge bg-danger">Critical</span></p>
-                    <p><strong>Description:</strong> This is a detailed description of the incident or violation that was reported.</p>
+                    <p><strong>Description:</strong> A red sedan ran a red light and almost hit a pedestrian.</p>
                     <hr>
                     <h5>Status History</h5>
                     <ul class="list-group">
-                        <li class="list-group-item">
-                            <strong>Submitted</strong> - ${new Date(Date.now() - 86400000).toLocaleString()} <br>
-                            <small class="text-muted">Report was submitted by user</small>
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            <div>
+                                <strong>Submitted</strong>
+                                <p class="mb-0">Report was submitted by user</p>
+                            </div>
+                            <span class="text-muted">${new Date().toLocaleDateString()}</span>
                         </li>
                     </ul>
                 `;
@@ -1285,11 +1121,11 @@ try {
         // View attachments
         function viewAttachments(reportId) {
             document.getElementById('attachmentsContent').innerHTML = `
-                <div class="text-center">
-                    <p>Loading attachments for report ID: ${reportId}</p>
-                    <div class="spinner-border" role="status">
+                <div class="text-center py-4">
+                    <div class="spinner-border text-primary" role="status">
                         <span class="visually-hidden">Loading...</span>
                     </div>
+                    <p class="mt-2">Loading attachments...</p>
                 </div>
             `;
             
@@ -1303,21 +1139,11 @@ try {
                     <div class="row">
                         <div class="col-md-6 mb-3">
                             <div class="card">
-                                <img src="https://via.placeholder.com/300x200?text=Violation+Image" class="card-img-top" alt="Report Image">
+                                <img src="/placeholder.svg?height=200&width=300" class="card-img-top" alt="Report Image">
                                 <div class="card-body">
-                                    <h6 class="card-title">violation_image.jpg</h6>
-                                    <p class="card-text"><small class="text-muted">Uploaded: ${new Date().toLocaleDateString()}</small></p>
-                                    <a href="#" class="btn btn-sm btn-primary">Download</a>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="col-md-6 mb-3">
-                            <div class="card">
-                                <div class="card-body text-center">
-                                    <i class="bx bx-file" style="font-size: 3rem;"></i>
-                                    <h6 class="card-title mt-2">additional_evidence.pdf</h6>
-                                    <p class="card-text"><small class="text-muted">Uploaded: ${new Date().toLocaleDateString()}</small></p>
-                                    <a href="#" class="btn btn-sm btn-primary">Download</a>
+                                    <h6 class="card-title">Traffic_Violation_001.jpg</h6>
+                                    <p class="card-text text-muted">Uploaded: ${new Date().toLocaleDateString()}</p>
+                                    <button class="btn btn-sm btn-outline-primary">Download</button>
                                 </div>
                             </div>
                         </div>
@@ -1326,7 +1152,12 @@ try {
             }, 1000);
         }
         
-        // Filter reports
+        // Edit report (placeholder function)
+        function editReport(reportId) {
+            alert('Edit functionality for report ' + reportId + ' would be implemented here.');
+        }
+        
+        // Filter reports (placeholder function)
         function filterReports() {
             const searchTerm = document.getElementById('searchReports').value.toLowerCase();
             const reportCards = document.querySelectorAll('.report-card');
@@ -1341,22 +1172,41 @@ try {
             });
         }
         
-        // Render charts for dashboard
-        function renderCharts() {
+        // Filter admin reports (placeholder function)
+        function filterAdminReports() {
+            const searchTerm = document.getElementById('adminSearch').value.toLowerCase();
+            const statusFilter = document.getElementById('statusFilter').value;
+            const reportCards = document.querySelectorAll('#admin_review .report-card');
+            
+            reportCards.forEach(card => {
+                const text = card.textContent.toLowerCase();
+                const status = card.classList.contains('status-pending') ? 'pending' : 
+                              card.classList.contains('status-verified') ? 'verified' : 'invalid';
+                
+                const matchesSearch = text.includes(searchTerm);
+                const matchesStatus = statusFilter === '' || status === statusFilter;
+                
+                if (matchesSearch && matchesStatus) {
+                    card.style.display = 'block';
+                } else {
+                    card.style.display = 'none';
+                }
+            });
+        }
+        
+        // Initialize charts
+        document.addEventListener('DOMContentLoaded', function() {
             // Report Type Distribution Chart
-            const typeCtx = document.getElementById('reportTypeChart').getContext('2d');
-            const typeChart = new Chart(typeCtx, {
+            const reportTypeCtx = document.getElementById('reportTypeChart').getContext('2d');
+            const reportTypeChart = new Chart(reportTypeCtx, {
                 type: 'pie',
                 data: {
-                    labels: ['Speeding', 'Red Light', 'Illegal Parking', 'Accident', 'Other'],
+                    labels: <?php echo json_encode(array_column($report_distribution, 'report_type')); ?>,
                     datasets: [{
-                        data: [35, 25, 20, 15, 5],
+                        data: <?php echo json_encode(array_column($report_distribution, 'count')); ?>,
                         backgroundColor: [
-                            '#1d3557',
-                            '#457b9d',
-                            '#a8dadc',
-                            '#e63946',
-                            '#f1faee'
+                            '#1d3557', '#457b9d', '#a8dadc', '#e63946', 
+                            '#f1faee', '#ff9f1c', '#ffbf69', '#cbf3f0'
                         ]
                     }]
                 },
@@ -1364,7 +1214,7 @@ try {
                     responsive: true,
                     plugins: {
                         legend: {
-                            position: 'bottom'
+                            position: 'right'
                         }
                     }
                 }
@@ -1377,11 +1227,13 @@ try {
                 data: {
                     labels: ['Pending', 'Verified', 'Invalid'],
                     datasets: [{
-                        data: [<?php echo $stats['pending_reports']; ?>, <?php echo $stats['verified_reports']; ?>, <?php echo $stats['invalid_reports']; ?>],
+                        data: [
+                            <?php echo $stats['pending_reports']; ?>,
+                            <?php echo $stats['verified_reports']; ?>,
+                            <?php echo $stats['invalid_reports']; ?>
+                        ],
                         backgroundColor: [
-                            '#ffc107',
-                            '#198754',
-                            '#dc3545'
+                            '#ffc107', '#198754', '#dc3545'
                         ]
                     }]
                 },
@@ -1389,7 +1241,7 @@ try {
                     responsive: true,
                     plugins: {
                         legend: {
-                            position: 'bottom'
+                            position: 'right'
                         }
                     }
                 }
@@ -1403,11 +1255,11 @@ try {
                     labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
                     datasets: [{
                         label: 'Reports Submitted',
-                        data: [12, 19, 8, 15, 10, 17],
+                        data: [12, 19, 8, 15, 14, 16],
                         borderColor: '#1d3557',
-                        tension: 0.1,
+                        backgroundColor: 'rgba(29, 53, 87, 0.1)',
                         fill: true,
-                        backgroundColor: 'rgba(29, 53, 87, 0.1)'
+                        tension: 0.3
                     }]
                 },
                 options: {
@@ -1418,20 +1270,6 @@ try {
                         }
                     }
                 }
-            });
-        }
-        
-        // Initialize when page loads
-        document.addEventListener('DOMContentLoaded', function() {
-            // Initialize charts if on dashboard
-            if (document.getElementById('dashboard').style.display === 'block') {
-                renderCharts();
-            }
-            
-            // Initialize Bootstrap tooltips
-            const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
-            tooltipTriggerList.map(function (tooltipTriggerEl) {
-                return new bootstrap.Tooltip(tooltipTriggerEl);
             });
         });
     </script>

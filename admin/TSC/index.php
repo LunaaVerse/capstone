@@ -8,41 +8,36 @@ if (!isset($_SESSION['user_id'])) {
     exit();
 }
 
-// Database connection
-try {
-    $pdo = new PDO("mysql:host=" . DB_HOST . ";dbname=" . DB_NAME, DB_USER, DB_PASS);
-    $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-} catch (PDOException $e) {
-    die("Database connection failed: " . $e->getMessage());
-}
-
-// Get all intersections
+// Get all intersections (using the existing tables from your schema)
 $intersections = [];
 try {
-    $stmt = $pdo->query("SELECT * FROM intersections ORDER BY name");
+    $stmt = $pdo->query("SELECT signal_id as intersection_id, intersection_name as name, location 
+                        FROM traffic_signals 
+                        ORDER BY intersection_name");
     $intersections = $stmt->fetchAll(PDO::FETCH_ASSOC);
 } catch (PDOException $e) {
     $error = "Error fetching intersections: " . $e->getMessage();
 }
 
-// Get signal schedules
+// Get signal schedules (using your existing table structure)
 $schedules = [];
 try {
-    $stmt = $pdo->query("SELECT ss.*, i.name as intersection_name 
+    $stmt = $pdo->query("SELECT ss.*, ts.intersection_name  
                         FROM signal_schedules ss 
-                        JOIN intersections i ON ss.intersection_id = i.intersection_id 
-                        ORDER BY i.name, ss.start_time");
+                        JOIN traffic_signals ts ON ss.signal_id = ts.signal_id 
+                        ORDER BY ts.intersection_name, ss.start_time");
     $schedules = $stmt->fetchAll(PDO::FETCH_ASSOC);
 } catch (PDOException $e) {
     $error = "Error fetching schedules: " . $e->getMessage();
 }
 
-// Get active signals
+// Get active signals (simulating this with your traffic_signals table)
 $active_signals = [];
 try {
-    $stmt = $pdo->query("SELECT asig.*, i.name as intersection_name 
-                        FROM active_signals asig 
-                        JOIN intersections i ON asig.intersection_id = i.intersection_id");
+    $stmt = $pdo->query("SELECT ts.signal_id, ts.intersection_name, ts.current_state as current_signal, 
+                        30 as timer_value, '1' as is_auto_mode, ts.status
+                        FROM traffic_signals ts 
+                        WHERE ts.status = 'online'");
     $active_signals = $stmt->fetchAll(PDO::FETCH_ASSOC);
 } catch (PDOException $e) {
     $error = "Error fetching active signals: " . $e->getMessage();
@@ -52,29 +47,17 @@ try {
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // Manual signal change
     if (isset($_POST['change_signal'])) {
-        $intersection_id = $_POST['intersection_id'];
+        $signal_id = $_POST['signal_id'];
         $signal = $_POST['signal'];
-        $timer = $_POST['timer'];
-        $is_auto = isset($_POST['is_auto']) ? 1 : 0;
         
         try {
-            // Check if record exists
-            $stmt = $pdo->prepare("SELECT * FROM active_signals WHERE intersection_id = ?");
-            $stmt->execute([$intersection_id]);
+            // Update the signal state
+            $stmt = $pdo->prepare("UPDATE traffic_signals SET current_state = ? WHERE signal_id = ?");
+            $stmt->execute([$signal, $signal_id]);
             
-            if ($stmt->rowCount() > 0) {
-                // Update existing record
-                $stmt = $pdo->prepare("UPDATE active_signals SET current_signal = ?, timer_value = ?, is_auto_mode = ?, last_change = NOW() WHERE intersection_id = ?");
-                $stmt->execute([$signal, $timer, $is_auto, $intersection_id]);
-            } else {
-                // Insert new record
-                $stmt = $pdo->prepare("INSERT INTO active_signals (intersection_id, current_signal, timer_value, is_auto_mode, last_change) VALUES (?, ?, ?, ?, NOW())");
-                $stmt->execute([$intersection_id, $signal, $timer, $is_auto]);
-            }
-            
-            // Log the change
-            $stmt = $pdo->prepare("INSERT INTO timing_changes_log (intersection_id, changed_by, change_description, red_duration_before, red_duration_after, yellow_duration_before, yellow_duration_after, green_duration_before, green_duration_after) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
-            $stmt->execute([$intersection_id, $_SESSION['user_id'], "Manual signal change to $signal", 0, 0, 0, 0, 0, 0]);
+            // Log the change (using your signal_logs table)
+            $stmt = $pdo->prepare("INSERT INTO signal_logs (signal_id, user_id, action, details) VALUES (?, ?, ?, ?)");
+            $stmt->execute([$signal_id, $_SESSION['user_id'], 'state_change', "Manual signal change to $signal"]);
             
             $_SESSION['success_message'] = "Signal changed successfully!";
             header("Location: " . $_SERVER['PHP_SELF']);
@@ -86,7 +69,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     
     // Update timing
     if (isset($_POST['update_timing'])) {
-        $intersection_id = $_POST['intersection_id'];
+        $signal_id = $_POST['signal_id'];
         $red_duration = $_POST['red_duration'];
         $yellow_duration = $_POST['yellow_duration'];
         $green_duration = $_POST['green_duration'];
@@ -94,18 +77,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         
         try {
             // Check if record exists
-            $stmt = $pdo->prepare("SELECT * FROM signal_timings WHERE intersection_id = ? AND time_period = ?");
-            $stmt->execute([$intersection_id, $time_period]);
+            $stmt = $pdo->prepare("SELECT * FROM signal_timings WHERE signal_id = ? AND time_period = ?");
+            $stmt->execute([$signal_id, $time_period]);
             
             if ($stmt->rowCount() > 0) {
                 // Update existing record
-                $stmt = $pdo->prepare("UPDATE signal_timings SET red_duration = ?, yellow_duration = ?, green_duration = ? WHERE intersection_id = ? AND time_period = ?");
-                $stmt->execute([$red_duration, $yellow_duration, $green_duration, $intersection_id, $time_period]);
+                $stmt = $pdo->prepare("UPDATE signal_timings SET red_duration = ?, yellow_duration = ?, green_duration = ? WHERE signal_id = ? AND time_period = ?");
+                $stmt->execute([$red_duration, $yellow_duration, $green_duration, $signal_id, $time_period]);
             } else {
                 // Insert new record
-                $stmt = $pdo->prepare("INSERT INTO signal_timings (intersection_id, red_duration, yellow_duration, green_duration, time_period, is_active) VALUES (?, ?, ?, ?, ?, 1)");
-                $stmt->execute([$intersection_id, $red_duration, $yellow_duration, $green_duration, $time_period]);
+                $stmt = $pdo->prepare("INSERT INTO signal_timings (signal_id, red_duration, yellow_duration, green_duration, time_period, is_active) VALUES (?, ?, ?, ?, ?, 1)");
+                $stmt->execute([$signal_id, $red_duration, $yellow_duration, $green_duration, $time_period]);
             }
+            
+            // Log the change
+            $stmt = $pdo->prepare("INSERT INTO signal_logs (signal_id, user_id, action, details) VALUES (?, ?, ?, ?)");
+            $stmt->execute([$signal_id, $_SESSION['user_id'], 'timing_change', "Updated timing for $time_period: R:$red_duration Y:$yellow_duration G:$green_duration"]);
             
             $_SESSION['success_message'] = "Timing updated successfully!";
             header("Location: " . $_SERVER['PHP_SELF']);
@@ -118,7 +105,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // Add/update schedule
     if (isset($_POST['save_schedule'])) {
         $schedule_id = $_POST['schedule_id'] ?? null;
-        $intersection_id = $_POST['intersection_id'];
+        $signal_id = $_POST['signal_id'];
         $time_period = $_POST['time_period'];
         $start_time = $_POST['start_time'];
         $end_time = $_POST['end_time'];
@@ -130,12 +117,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         try {
             if ($schedule_id) {
                 // Update existing schedule
-                $stmt = $pdo->prepare("UPDATE signal_schedules SET intersection_id = ?, time_period = ?, start_time = ?, end_time = ?, red_duration = ?, yellow_duration = ?, green_duration = ?, is_active = ? WHERE schedule_id = ?");
-                $stmt->execute([$intersection_id, $time_period, $start_time, $end_time, $red_duration, $yellow_duration, $green_duration, $is_active, $schedule_id]);
+                $stmt = $pdo->prepare("UPDATE signal_schedules SET signal_id = ?, time_period = ?, start_time = ?, end_time = ?, red_duration = ?, yellow_duration = ?, green_duration = ?, is_active = ? WHERE schedule_id = ?");
+                $stmt->execute([$signal_id, $time_period, $start_time, $end_time, $red_duration, $yellow_duration, $green_duration, $is_active, $schedule_id]);
             } else {
                 // Insert new schedule
-                $stmt = $pdo->prepare("INSERT INTO signal_schedules (intersection_id, time_period, start_time, end_time, red_duration, yellow_duration, green_duration, is_active) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
-                $stmt->execute([$intersection_id, $time_period, $start_time, $end_time, $red_duration, $yellow_duration, $green_duration, $is_active]);
+                $stmt = $pdo->prepare("INSERT INTO signal_schedules (signal_id, time_period, start_time, end_time, red_duration, yellow_duration, green_duration, is_active) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
+                $stmt->execute([$signal_id, $time_period, $start_time, $end_time, $red_duration, $yellow_duration, $green_duration, $is_active]);
             }
             
             $_SESSION['success_message'] = "Schedule saved successfully!";
@@ -163,17 +150,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-// Get timing changes log
-$timing_changes = [];
+// Get signal logs for dashboard
+$signal_logs = [];
 try {
-    $stmt = $pdo->query("SELECT tcl.*, i.name as intersection_name 
-                        FROM timing_changes_log tcl 
-                        JOIN intersections i ON tcl.intersection_id = i.intersection_id 
-                        ORDER BY tcl.created_at DESC 
+    $stmt = $pdo->query("SELECT sl.*, ts.intersection_name  
+                        FROM signal_logs sl 
+                        JOIN traffic_signals ts ON sl.signal_id = ts.signal_id 
+                        ORDER BY sl.created_at DESC 
                         LIMIT 10");
-    $timing_changes = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    $signal_logs = $stmt->fetchAll(PDO::FETCH_ASSOC);
 } catch (PDOException $e) {
-    $error = "Error fetching timing changes: " . $e->getMessage();
+    $error = "Error fetching signal logs: " . $e->getMessage();
+}
+
+// Get signal timings
+$signal_timings = [];
+try {
+    $stmt = $pdo->query("SELECT st.*, ts.intersection_name  
+                        FROM signal_timings st 
+                        JOIN traffic_signals ts ON st.signal_id = ts.signal_id 
+                        ORDER BY ts.intersection_name, st.time_period");
+    $signal_timings = $stmt->fetchAll(PDO::FETCH_ASSOC);
+} catch (PDOException $e) {
+    $error = "Error fetching signal timings: " . $e->getMessage();
 }
 ?>
 <!DOCTYPE html>
@@ -599,7 +598,7 @@ try {
                             <p id="autoModeSignals"><?php 
                                 $auto_count = 0;
                                 foreach ($active_signals as $signal) {
-                                    if ($signal['is_auto_mode']) $auto_count++;
+                                    if (isset($signal['is_auto_mode']) && $signal['is_auto_mode']) $auto_count++;
                                 }
                                 echo $auto_count;
                             ?></p>
@@ -620,16 +619,16 @@ try {
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            <?php if (empty($timing_changes)): ?>
+                                            <?php if (empty($signal_logs)): ?>
                                                 <tr>
                                                     <td colspan="3" class="text-center">No recent changes</td>
                                                 </tr>
                                             <?php else: ?>
-                                                <?php foreach ($timing_changes as $change): ?>
+                                                <?php foreach ($signal_logs as $log): ?>
                                                     <tr>
-                                                        <td><?php echo htmlspecialchars($change['intersection_name']); ?></td>
-                                                        <td><?php echo htmlspecialchars($change['change_description']); ?></td>
-                                                        <td><?php echo date('H:i', strtotime($change['created_at'])); ?></td>
+                                                        <td><?php echo htmlspecialchars($log['intersection_name']); ?></td>
+                                                        <td><?php echo htmlspecialchars($log['details']); ?></td>
+                                                        <td><?php echo date('H:i', strtotime($log['created_at'])); ?></td>
                                                     </tr>
                                                 <?php endforeach; ?>
                                             <?php endif; ?>
@@ -648,7 +647,7 @@ try {
                                             <tr>
                                                 <th>Intersection</th>
                                                 <th>Signal</th>
-                                                <th>Timer</th>
+                                                <th>Status</th>
                                                 <th>Mode</th>
                                             </tr>
                                         </thead>
@@ -670,10 +669,14 @@ try {
                                                             ?>
                                                             <span class="badge <?php echo $badge_class; ?>"><?php echo ucfirst($signal['current_signal']); ?></span>
                                                         </td>
-                                                        <td><?php echo $signal['timer_value']; ?>s</td>
                                                         <td>
-                                                            <span class="badge <?php echo $signal['is_auto_mode'] ? 'bg-info' : 'bg-secondary'; ?>">
-                                                                <?php echo $signal['is_auto_mode'] ? 'Auto' : 'Manual'; ?>
+                                                            <span class="badge <?php echo $signal['status'] == 'online' ? 'bg-success' : 'bg-secondary'; ?>">
+                                                                <?php echo ucfirst($signal['status']); ?>
+                                                            </span>
+                                                        </td>
+                                                        <td>
+                                                            <span class="badge <?php echo isset($signal['is_auto_mode']) && $signal['is_auto_mode'] ? 'bg-info' : 'bg-secondary'; ?>">
+                                                                <?php echo isset($signal['is_auto_mode']) && $signal['is_auto_mode'] ? 'Auto' : 'Manual'; ?>
                                                             </span>
                                                         </td>
                                                     </tr>
@@ -743,12 +746,11 @@ try {
                             </div>
                             
                             <form id="signalForm" method="POST">
-                                <input type="hidden" id="formIntersectionId" name="intersection_id" value="">
+                                <input type="hidden" id="formSignalId" name="signal_id" value="">
                                 <input type="hidden" id="formSignal" name="signal" value="">
-                                <input type="hidden" id="formTimer" name="timer" value="30">
-                                <input type="hidden" id="formIsAuto" name="is_auto" value="1">
+                                <input type="hidden" name="change_signal" value="1">
                                 
-                                <button type="submit" name="change_signal" class="btn btn-primary" id="submitSignalBtn" disabled>
+                                <button type="submit" class="btn btn-primary" id="submitSignalBtn" disabled>
                                     <i class="bx bx-check"></i> Apply Signal Change
                                 </button>
                                 <button type="button" class="btn btn-outline-secondary" onclick="resetSignalForm()">
@@ -774,7 +776,7 @@ try {
                             <form id="timingForm" method="POST">
                                 <div class="mb-3">
                                     <label class="form-label">Intersection</label>
-                                    <select class="form-select" name="intersection_id" required>
+                                    <select class="form-select" name="signal_id" required>
                                         <option value="">Select an intersection</option>
                                         <?php foreach ($intersections as $intersection): ?>
                                             <option value="<?php echo $intersection['intersection_id']; ?>"><?php echo htmlspecialchars($intersection['name']); ?></option>
@@ -835,33 +837,21 @@ try {
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        <?php
-                                        try {
-                                            $stmt = $pdo->query("SELECT st.*, i.name as intersection_name 
-                                                                FROM signal_timings st 
-                                                                JOIN intersections i ON st.intersection_id = i.intersection_id 
-                                                                ORDER BY i.name, st.time_period");
-                                            $timings = $stmt->fetchAll(PDO::FETCH_ASSOC);
-                                            
-                                            if (empty($timings)): ?>
+                                        <?php if (empty($signal_timings)): ?>
+                                            <tr>
+                                                <td colspan="5" class="text-center">No timing configurations found</td>
+                                            </tr>
+                                        <?php else: ?>
+                                            <?php foreach ($signal_timings as $timing): ?>
                                                 <tr>
-                                                    <td colspan="5" class="text-center">No timing configurations found</td>
+                                                    <td><?php echo htmlspecialchars($timing['intersection_name']); ?></td>
+                                                    <td><?php echo ucfirst(str_replace('_', ' ', $timing['time_period'])); ?></td>
+                                                    <td><?php echo $timing['red_duration']; ?></td>
+                                                    <td><?php echo $timing['yellow_duration']; ?></td>
+                                                    <td><?php echo $timing['green_duration']; ?></td>
                                                 </tr>
-                                            <?php else: ?>
-                                                <?php foreach ($timings as $timing): ?>
-                                                    <tr>
-                                                        <td><?php echo htmlspecialchars($timing['intersection_name']); ?></td>
-                                                        <td><?php echo ucfirst(str_replace('_', ' ', $timing['time_period'])); ?></td>
-                                                        <td><?php echo $timing['red_duration']; ?></td>
-                                                        <td><?php echo $timing['yellow_duration']; ?></td>
-                                                        <td><?php echo $timing['green_duration']; ?></td>
-                                                    </tr>
-                                                <?php endforeach; ?>
-                                            <?php endif;
-                                        } catch (PDOException $e) {
-                                            echo '<tr><td colspan="5" class="text-center">Error loading timings</td></tr>';
-                                        }
-                                        ?>
+                                            <?php endforeach; ?>
+                                        <?php endif; ?>
                                     </tbody>
                                 </table>
                             </div>
@@ -878,11 +868,11 @@ try {
                             <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap">
                                 <h4>Signal Schedules</h4>
                                 <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#scheduleModal">
-                                    <i class="bx bx-plus"></i> Add Schedule
+                                    <i class="bx bx-plus"></i> Add New Schedule
                                 </button>
                             </div>
                             
-                            <div class="table-responsive">
+                            <div style="max-height: 500px; overflow-y: auto;">
                                 <table class="table table-hover schedule-table">
                                     <thead>
                                         <tr>
@@ -918,17 +908,21 @@ try {
                                                         </span>
                                                     </td>
                                                     <td>
-                                                        <button class="btn btn-sm btn-outline-primary" 
-                                                                onclick="editSchedule(<?php echo $schedule['schedule_id']; ?>)">
-                                                            <i class="bx bx-edit"></i>
-                                                        </button>
-                                                        <form method="POST" style="display: inline-block;">
-                                                            <input type="hidden" name="schedule_id" value="<?php echo $schedule['schedule_id']; ?>">
-                                                            <button type="submit" name="delete_schedule" class="btn btn-sm btn-outline-danger" 
-                                                                    onclick="return confirm('Are you sure you want to delete this schedule?')">
-                                                                <i class="bx bx-trash"></i>
+                                                        <div class="btn-group btn-group-sm">
+                                                            <button class="btn btn-outline-primary" 
+                                                                    data-bs-toggle="modal" 
+                                                                    data-bs-target="#scheduleModal"
+                                                                    onclick="editSchedule(<?php echo htmlspecialchars(json_encode($schedule)); ?>)">
+                                                                <i class="bx bx-edit"></i>
                                                             </button>
-                                                        </form>
+                                                            <form method="POST" style="display: inline;">
+                                                                <input type="hidden" name="schedule_id" value="<?php echo $schedule['schedule_id']; ?>">
+                                                                <button type="submit" name="delete_schedule" class="btn btn-outline-danger" 
+                                                                        onclick="return confirm('Are you sure you want to delete this schedule?')">
+                                                                    <i class="bx bx-trash"></i>
+                                                                </button>
+                                                            </form>
+                                                        </div>
                                                     </td>
                                                 </tr>
                                             <?php endforeach; ?>
@@ -942,22 +936,22 @@ try {
             </div>
         </main>
     </section>
-
+    
     <!-- Schedule Modal -->
-    <div class="modal fade" id="scheduleModal" tabindex="-1" aria-hidden="true">
+    <div class="modal fade" id="scheduleModal" tabindex="-1" aria-labelledby="scheduleModalLabel" aria-hidden="true">
         <div class="modal-dialog">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title">Add/Edit Schedule</h5>
+                    <h5 class="modal-title" id="scheduleModalLabel">Add/Edit Schedule</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
-                <form method="POST" id="scheduleForm">
+                <form id="scheduleForm" method="POST">
                     <div class="modal-body">
-                        <input type="hidden" name="schedule_id" id="scheduleId">
+                        <input type="hidden" id="scheduleId" name="schedule_id">
                         
                         <div class="mb-3">
                             <label class="form-label">Intersection</label>
-                            <select class="form-select" name="intersection_id" id="scheduleIntersection" required>
+                            <select class="form-select" name="signal_id" id="modalSignalId" required>
                                 <option value="">Select an intersection</option>
                                 <?php foreach ($intersections as $intersection): ?>
                                     <option value="<?php echo $intersection['intersection_id']; ?>"><?php echo htmlspecialchars($intersection['name']); ?></option>
@@ -967,7 +961,7 @@ try {
                         
                         <div class="mb-3">
                             <label class="form-label">Time Period</label>
-                            <select class="form-select" name="time_period" id="schedulePeriod" required>
+                            <select class="form-select" name="time_period" id="modalTimePeriod" required>
                                 <option value="">Select time period</option>
                                 <option value="peak_morning">Peak Morning</option>
                                 <option value="off_peak_morning">Off-Peak Morning</option>
@@ -981,32 +975,32 @@ try {
                         <div class="row mb-3">
                             <div class="col-md-6">
                                 <label class="form-label">Start Time</label>
-                                <input type="time" class="form-control" name="start_time" id="scheduleStart" required>
+                                <input type="time" class="form-control" name="start_time" id="modalStartTime" required>
                             </div>
                             <div class="col-md-6">
                                 <label class="form-label">End Time</label>
-                                <input type="time" class="form-control" name="end_time" id="scheduleEnd" required>
+                                <input type="time" class="form-control" name="end_time" id="modalEndTime" required>
                             </div>
                         </div>
                         
                         <div class="row mb-3">
                             <div class="col-md-4">
                                 <label class="form-label">Red Duration (s)</label>
-                                <input type="number" class="form-control" name="red_duration" id="scheduleRed" value="30" min="5" max="120" required>
+                                <input type="number" class="form-control" name="red_duration" id="modalRedDuration" value="30" min="5" max="120" required>
                             </div>
                             <div class="col-md-4">
                                 <label class="form-label">Yellow Duration (s)</label>
-                                <input type="number" class="form-control" name="yellow_duration" id="scheduleYellow" value="5" min="3" max="10" required>
+                                <input type="number" class="form-control" name="yellow_duration" id="modalYellowDuration" value="5" min="3" max="10" required>
                             </div>
                             <div class="col-md-4">
                                 <label class="form-label">Green Duration (s)</label>
-                                <input type="number" class="form-control" name="green_duration" id="scheduleGreen" value="45" min="10" max="180" required>
+                                <input type="number" class="form-control" name="green_duration" id="modalGreenDuration" value="45" min="10" max="180" required>
                             </div>
                         </div>
                         
                         <div class="form-check mb-3">
-                            <input class="form-check-input" type="checkbox" name="is_active" id="scheduleActive" checked>
-                            <label class="form-check-label" for="scheduleActive">Active Schedule</label>
+                            <input class="form-check-input" type="checkbox" id="modalIsActive" name="is_active" checked>
+                            <label class="form-check-label" for="modalIsActive">Active Schedule</label>
                         </div>
                     </div>
                     <div class="modal-footer">
@@ -1019,6 +1013,7 @@ try {
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
         // Tab navigation
         function openTab(evt, tabName) {
@@ -1034,98 +1029,110 @@ try {
                 tabbuttons[i].className = tabbuttons[i].className.replace(" active", "");
             }
             
-            // Show the specific tab content
+            // Show the specific tab content and add active class to the button
             document.getElementById(tabName).style.display = "block";
-            
-            // Add active class to the button that opened the tab
             evt.currentTarget.className += " active";
         }
         
         // Signal control functions
         let currentSignal = null;
-        let currentIntersection = null;
+        let currentSignalId = null;
         
         function updateSignalDisplay() {
-            const intersectionId = document.getElementById('intersectionSelect').value;
-            currentIntersection = intersectionId;
+            const select = document.getElementById('intersectionSelect');
+            const signalId = select.value;
+            const signalName = select.options[select.selectedIndex].text;
             
-            // Enable/disable form based on selection
-            document.getElementById('submitSignalBtn').disabled = !intersectionId || !currentSignal;
-            document.getElementById('formIntersectionId').value = intersectionId;
-            
-            // TODO: Fetch current signal status for the selected intersection
-            // For now, we'll just reset the display
-            resetLights();
+            if (signalId) {
+                // In a real application, you would fetch the current signal state from the server
+                // For now, we'll simulate with default values
+                document.getElementById('formSignalId').value = signalId;
+                currentSignalId = signalId;
+                
+                // Enable the submit button
+                document.getElementById('submitSignalBtn').disabled = false;
+                
+                // Update the display to show the selected intersection
+                document.getElementById('timerDisplay').textContent = "30s";
+                
+                // Reset lights
+                document.getElementById('redLight').className = 'signal-light';
+                document.getElementById('yellowLight').className = 'signal-light';
+                document.getElementById('greenLight').className = 'signal-light';
+            } else {
+                // Reset if no intersection selected
+                resetSignalForm();
+            }
         }
         
         function setSignal(signal) {
             currentSignal = signal;
-            
-            // Update visual display
-            resetLights();
-            document.getElementById(signal + 'Light').classList.add('active-' + signal);
-            
-            // Update form values
             document.getElementById('formSignal').value = signal;
-            document.getElementById('formTimer').value = document.getElementById('timerInput').value;
-            document.getElementById('formIsAuto').value = document.getElementById('autoModeCheck').checked ? '1' : '0';
             
-            // Enable submit button if intersection is selected
-            if (currentIntersection) {
-                document.getElementById('submitSignalBtn').disabled = false;
-            }
-        }
-        
-        function resetLights() {
-            document.getElementById('redLight').className = 'signal-light';
-            document.getElementById('yellowLight').className = 'signal-light';
-            document.getElementById('greenLight').className = 'signal-light';
+            // Update the visual display
+            document.getElementById('redLight').className = 'signal-light' + (signal === 'red' ? ' active-red' : '');
+            document.getElementById('yellowLight').className = 'signal-light' + (signal === 'yellow' ? ' active-yellow' : '');
+            document.getElementById('greenLight').className = 'signal-light' + (signal === 'green' ? ' active-green' : '');
         }
         
         function resetSignalForm() {
             document.getElementById('intersectionSelect').value = '';
-            document.getElementById('timerInput').value = '30';
-            document.getElementById('autoModeCheck').checked = true;
-            resetLights();
-            currentSignal = null;
-            currentIntersection = null;
+            document.getElementById('formSignalId').value = '';
+            document.getElementById('formSignal').value = '';
             document.getElementById('submitSignalBtn').disabled = true;
             document.getElementById('timerDisplay').textContent = '--';
+            
+            // Reset lights
+            document.getElementById('redLight').className = 'signal-light';
+            document.getElementById('yellowLight').className = 'signal-light';
+            document.getElementById('greenLight').className = 'signal-light';
+            
+            currentSignal = null;
+            currentSignalId = null;
         }
         
-        // Schedule functions
-        function editSchedule(scheduleId) {
-            // TODO: Fetch schedule data via AJAX and populate the form
-            // For now, we'll just show the modal
-            var myModal = new bootstrap.Modal(document.getElementById('scheduleModal'));
-            myModal.show();
-            
-            // Reset form
+        // Schedule modal functions
+        function editSchedule(schedule) {
+            document.getElementById('scheduleId').value = schedule.schedule_id;
+            document.getElementById('modalSignalId').value = schedule.signal_id;
+            document.getElementById('modalTimePeriod').value = schedule.time_period;
+            document.getElementById('modalStartTime').value = schedule.start_time.substring(0, 5);
+            document.getElementById('modalEndTime').value = schedule.end_time.substring(0, 5);
+            document.getElementById('modalRedDuration').value = schedule.red_duration;
+            document.getElementById('modalYellowDuration').value = schedule.yellow_duration;
+            document.getElementById('modalGreenDuration').value = schedule.green_duration;
+            document.getElementById('modalIsActive').checked = schedule.is_active == 1;
+        }
+        
+        // Reset modal when closed
+        document.getElementById('scheduleModal').addEventListener('hidden.bs.modal', function () {
             document.getElementById('scheduleForm').reset();
-            document.getElementById('scheduleId').value = scheduleId;
-            
-            // TODO: Populate form with schedule data
-        }
+            document.getElementById('scheduleId').value = '';
+        });
         
-        // Initialize
-        document.addEventListener('DOMContentLoaded', function() {
-            // Initialize timer display
-            document.getElementById('timerDisplay').textContent = document.getElementById('timerInput').value + 's';
-            
-            // Update timer display when input changes
-            document.getElementById('timerInput').addEventListener('input', function() {
-                document.getElementById('timerDisplay').textContent = this.value + 's';
-                if (currentSignal) {
-                    document.getElementById('formTimer').value = this.value;
-                }
+        // Auto-dismiss alerts after 5 seconds
+        setTimeout(function() {
+            var alerts = document.querySelectorAll('.alert');
+            alerts.forEach(function(alert) {
+                var bsAlert = new bootstrap.Alert(alert);
+                bsAlert.close();
             });
-            
-            // Update auto mode when checkbox changes
-            document.getElementById('autoModeCheck').addEventListener('change', function() {
-                if (currentSignal) {
-                    document.getElementById('formIsAuto').value = this.checked ? '1' : '0';
+        }, 5000);
+        
+        // Profile dropdown toggle
+        document.getElementById('profile-btn').addEventListener('click', function(e) {
+            e.preventDefault();
+            document.getElementById('dropdown-menu').classList.toggle('show');
+        });
+        
+        // Close dropdown when clicking outside
+        window.addEventListener('click', function(e) {
+            if (!e.target.matches('#profile-btn') && !e.target.closest('#dropdown-menu')) {
+                var dropdown = document.getElementById('dropdown-menu');
+                if (dropdown.classList.contains('show')) {
+                    dropdown.classList.remove('show');
                 }
-            });
+            }
         });
     </script>
 </body>
