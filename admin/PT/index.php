@@ -21,6 +21,9 @@ $stmt = $pdo->prepare("SELECT * FROM users WHERE user_id = ?");
 $stmt->execute([$user_id]);
 $user = $stmt->fetch();
 
+// Initialize error array
+$errors = [];
+
 // Handle form submissions
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (isset($_POST['save_schedule'])) {
@@ -29,13 +32,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $errors = [];
         
         foreach ($required_fields as $field) {
-            if (empty($_POST[$field])) {
+            if (empty(trim($_POST[$field]))) {
                 $errors[] = ucfirst(str_replace('_', ' ', $field)) . " is required.";
             }
         }
         
+        // Validate operating days
         if (!isset($_POST['operating_days']) || empty($_POST['operating_days'])) {
             $errors[] = "At least one operating day must be selected.";
+        }
+        
+        // Validate fare is numeric
+        if (!empty($_POST['fare']) && !is_numeric($_POST['fare'])) {
+            $errors[] = "Fare must be a valid number.";
+        }
+        
+        // Validate frequency is numeric
+        if (!empty($_POST['frequency']) && !is_numeric($_POST['frequency'])) {
+            $errors[] = "Frequency must be a valid number.";
         }
         
         // If no validation errors, proceed with saving
@@ -62,15 +76,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 
                 if ($result) {
                     $_SESSION['success_message'] = "Route schedule saved successfully!";
+                    // Clear form data after successful submission
+                    unset($_POST);
                 } else {
                     $_SESSION['error_message'] = "Failed to save route schedule. Please try again.";
                 }
             } catch (PDOException $e) {
-                $_SESSION['error_message'] = "Database error: " . $e->getMessage();
+                // Check if it's a duplicate entry error
+                if (strpos($e->getMessage(), 'Duplicate entry') !== false) {
+                    $_SESSION['error_message'] = "A route with this name already exists.";
+                } else {
+                    $_SESSION['error_message'] = "Database error: " . $e->getMessage();
+                }
             }
         } else {
             $_SESSION['error_message'] = implode("<br>", $errors);
         }
+        
+        // Redirect to avoid form resubmission
+        header("Location: " . $_SERVER['PHP_SELF']);
+        exit();
     } 
     elseif (isset($_POST['calculate_eta'])) {
         // Calculate ETA
@@ -127,11 +152,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } catch (PDOException $e) {
             $_SESSION['error_message'] = "Database error: " . $e->getMessage();
         }
+        
+        // Redirect to avoid form resubmission
+        header("Location: " . $_SERVER['PHP_SELF']);
+        exit();
     }
-    
-    // Redirect to avoid form resubmission
-    header("Location: " . $_SERVER['PHP_SELF']);
-    exit();
 }
 
 // Get all routes for dropdown
@@ -558,7 +583,7 @@ $on_time_performance = rand(80, 95);
                   <input type="hidden" name="save_schedule" value="1">
                   <div class="mb-3">
                     <label class="form-label">Route Name</label>
-                    <input type="text" class="form-control" name="route_name" placeholder="e.g., Route A - City Center" required>
+                    <input type="text" class="form-control" name="route_name" placeholder="e.g., Route A - City Center" value="<?php echo isset($_POST['route_name']) ? htmlspecialchars($_POST['route_name']) : ''; ?>" required>
                   </div>
                   
                   <div class="row mb-3">
@@ -566,72 +591,72 @@ $on_time_performance = rand(80, 95);
                       <label class="form-label">Vehicle Type</label>
                       <select class="form-select" name="vehicle_type" required>
                         <option value="">Select vehicle type</option>
-                        <option value="bus">Bus</option>
-                        <option value="jeepney">Jeepney</option>
-                        <option value="van">Van</option>
+                        <option value="bus" <?php echo (isset($_POST['vehicle_type']) && $_POST['vehicle_type'] == 'bus') ? 'selected' : ''; ?>>Bus</option>
+                        <option value="jeepney" <?php echo (isset($_POST['vehicle_type']) && $_POST['vehicle_type'] == 'jeepney') ? 'selected' : ''; ?>>Jeepney</option>
+                        <option value="van" <?php echo (isset($_POST['vehicle_type']) && $_POST['vehicle_type'] == 'van') ? 'selected' : ''; ?>>Van</option>
                       </select>
                     </div>
                     <div class="col-md-6">
                       <label class="form-label">Fare (PHP)</label>
-                      <input type="number" class="form-control" name="fare" placeholder="15.00" step="0.50" min="0" required>
+                      <input type="number" class="form-control" name="fare" placeholder="15.00" step="0.50" min="0" value="<?php echo isset($_POST['fare']) ? htmlspecialchars($_POST['fare']) : ''; ?>" required>
                     </div>
                   </div>
                   
                   <div class="mb-3">
                     <label class="form-label">Start Location</label>
-                    <input type="text" class="form-control" name="start_location" placeholder="Terminal/Station name" required>
+                    <input type="text" class="form-control" name="start_location" placeholder="Terminal/Station name" value="<?php echo isset($_POST['start_location']) ? htmlspecialchars($_POST['start_location']) : ''; ?>" required>
                   </div>
                   
                   <div class="mb-3">
                     <label class="form-label">End Location</label>
-                    <input type="text" class="form-control" name="end_location" placeholder="Destination name" required>
+                    <input type="text" class="form-control" name="end_location" placeholder="Destination name" value="<?php echo isset($_POST['end_location']) ? htmlspecialchars($_POST['end_location']) : ''; ?>" required>
                   </div>
                   
                   <div class="row mb-3">
                     <div class="col-md-6">
                       <label class="form-label">First Trip</label>
-                      <input type="time" class="form-control" name="first_trip" required>
+                      <input type="time" class="form-control" name="first_trip" value="<?php echo isset($_POST['first_trip']) ? htmlspecialchars($_POST['first_trip']) : ''; ?>" required>
                     </div>
                     <div class="col-md-6">
                       <label class="form-label">Last Trip</label>
-                      <input type="time" class="form-control" name="last_trip" required>
+                      <input type="time" class="form-control" name="last_trip" value="<?php echo isset($_POST['last_trip']) ? htmlspecialchars($_POST['last_trip']) : ''; ?>" required>
                     </div>
                   </div>
                   
                   <div class="mb-3">
                     <label class="form-label">Frequency (minutes)</label>
-                    <input type="number" class="form-control" name="frequency" placeholder="15" min="5" max="60" required>
+                    <input type="number" class="form-control" name="frequency" placeholder="15" min="5" max="60" value="<?php echo isset($_POST['frequency']) ? htmlspecialchars($_POST['frequency']) : ''; ?>" required>
                   </div>
                   
                   <div class="mb-3">
                     <label class="form-label">Operating Days</label>
                     <div class="form-check-group">
                       <div class="form-check form-check-inline">
-                        <input class="form-check-input" type="checkbox" name="operating_days[]" value="monday" id="monday">
+                        <input class="form-check-input" type="checkbox" name="operating_days[]" value="monday" id="monday" <?php echo (isset($_POST['operating_days']) && in_array('monday', $_POST['operating_days'])) ? 'checked' : ''; ?>>
                         <label class="form-check-label" for="monday">Mon</label>
                       </div>
                       <div class="form-check form-check-inline">
-                        <input class="form-check-input" type="checkbox" name="operating_days[]" value="tuesday" id="tuesday">
+                        <input class="form-check-input" type="checkbox" name="operating_days[]" value="tuesday" id="tuesday" <?php echo (isset($_POST['operating_days']) && in_array('tuesday', $_POST['operating_days'])) ? 'checked' : ''; ?>>
                         <label class="form-check-label" for="tuesday">Tue</label>
                       </div>
                       <div class="form-check form-check-inline">
-                        <input class="form-check-input" type="checkbox" name="operating_days[]" value="wednesday" id="wednesday">
+                        <input class="form-check-input" type="checkbox" name="operating_days[]" value="wednesday" id="wednesday" <?php echo (isset($_POST['operating_days']) && in_array('wednesday', $_POST['operating_days'])) ? 'checked' : ''; ?>>
                         <label class="form-check-label" for="wednesday">Wed</label>
                       </div>
                       <div class="form-check form-check-inline">
-                        <input class="form-check-input" type="checkbox" name="operating_days[]" value="thursday" id="thursday">
+                        <input class="form-check-input" type="checkbox" name="operating_days[]" value="thursday" id="thursday" <?php echo (isset($_POST['operating_days']) && in_array('thursday', $_POST['operating_days'])) ? 'checked' : ''; ?>>
                         <label class="form-check-label" for="thursday">Thu</label>
                       </div>
                       <div class="form-check form-check-inline">
-                        <input class="form-check-input" type="checkbox" name="operating_days[]" value="friday" id="friday">
+                        <input class="form-check-input" type="checkbox" name="operating_days[]" value="friday" id="friday" <?php echo (isset($_POST['operating_days']) && in_array('friday', $_POST['operating_days'])) ? 'checked' : ''; ?>>
                         <label class="form-check-label" for="friday">Fri</label>
                       </div>
                       <div class="form-check form-check-inline">
-                        <input class="form-check-input" type="checkbox" name="operating_days[]" value="saturday" id="saturday">
+                        <input class="form-check-input" type="checkbox" name="operating_days[]" value="saturday" id="saturday" <?php echo (isset($_POST['operating_days']) && in_array('saturday', $_POST['operating_days'])) ? 'checked' : ''; ?>>
                         <label class="form-check-label" for="saturday">Sat</label>
                       </div>
                       <div class="form-check form-check-inline">
-                        <input class="form-check-input" type="checkbox" name="operating_days[]" value="sunday" id="sunday">
+                        <input class="form-check-input" type="checkbox" name="operating_days[]" value="sunday" id="sunday" <?php echo (isset($_POST['operating_days']) && in_array('sunday', $_POST['operating_days'])) ? 'checked' : ''; ?>>
                         <label class="form-check-label" for="sunday">Sun</label>
                       </div>
                     </div>
@@ -783,43 +808,45 @@ $on_time_performance = rand(80, 95);
                       $route_name->execute([$_SESSION['eta_data']['route']]);
                       echo $route_name->fetch()['route_name'];
                     ?></p>
-                    <p><strong>From:</strong> <?php echo $_SESSION['eta_data']['current_location']; ?></p>
-                    <p><strong>To:</strong> <?php echo $_SESSION['eta_data']['target_stop']; ?></p>
-                    <h4><i class="bx bx-time"></i> ETA: <?php echo $_SESSION['eta_data']['estimated_minutes']; ?> minutes</h4>
-                    <p>Arrives at: <?php echo $_SESSION['eta_data']['arrival_time']; ?></p>
-                    <small>Updated: <?php echo $_SESSION['eta_data']['timestamp']; ?></small>
+                    <p><strong>Current Location:</strong> <?php echo $_SESSION['eta_data']['current_location']; ?></p>
+                    <p><strong>Target Stop:</strong> <?php echo $_SESSION['eta_data']['target_stop']; ?></p>
+                    <p><strong>Estimated Arrival:</strong> <?php echo $_SESSION['eta_data']['arrival_time']; ?></p>
+                    <p><strong>Estimated Time:</strong> <?php echo $_SESSION['eta_data']['estimated_minutes']; ?> minutes</p>
+                    <p><small>Calculated at: <?php echo $_SESSION['eta_data']['timestamp']; ?></small></p>
                   </div>
                   <?php unset($_SESSION['eta_data']); ?>
+                  <?php else: ?>
+                  <div class="alert alert-info">
+                    <i class="bx bx-info-circle"></i> No ETA data available. Calculate an ETA to display it here.
+                  </div>
                   <?php endif; ?>
                 </div>
                 
-                <div class="mt-4">
-                  <h5>Recent ETA Updates</h5>
-                  <div class="schedule-table" style="max-height: 300px;">
-                    <table class="table table-sm">
-                      <thead>
-                        <tr>
-                          <th>Vehicle</th>
-                          <th>Route</th>
-                          <th>ETA</th>
-                          <th>Updated</th>
-                        </tr>
-                      </thead>
-                      <tbody id="etaHistoryTable">
-                        <?php foreach ($etas as $eta): ?>
-                        <tr>
-                          <td><?php echo $eta['vehicle_id']; ?></td>
-                          <td><?php echo $eta['route_name']; ?></td>
-                          <td><?php echo $eta['estimated_minutes']; ?> min</td>
-                          <td><?php echo date('H:i:s', strtotime($eta['created_at'])); ?></td>
-                        </tr>
-                        <?php endforeach; ?>
-                        <?php if (empty($etas)): ?>
-                        <tr><td colspan="4" class="text-center">No ETA history</td></tr>
-                        <?php endif; ?>
-                      </tbody>
-                    </table>
-                  </div>
+                <h5 class="mt-4">Recent ETA Calculations</h5>
+                <div class="schedule-table">
+                  <table class="table table-sm">
+                    <thead>
+                      <tr>
+                        <th>Vehicle</th>
+                        <th>Route</th>
+                        <th>ETA (min)</th>
+                        <th>Time</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <?php foreach ($etas as $eta): ?>
+                      <tr>
+                        <td><?php echo $eta['vehicle_id']; ?></td>
+                        <td><?php echo $eta['route_name']; ?></td>
+                        <td><?php echo $eta['estimated_minutes']; ?></td>
+                        <td><?php echo date('H:i', strtotime($eta['created_at'])); ?></td>
+                      </tr>
+                      <?php endforeach; ?>
+                      <?php if (empty($etas)): ?>
+                      <tr><td colspan="4" class="text-center">No ETA records found</td></tr>
+                      <?php endif; ?>
+                    </tbody>
+                  </table>
                 </div>
               </div>
             </div>
@@ -829,51 +856,40 @@ $on_time_performance = rand(80, 95);
         <!-- Commuter Info Tab -->
         <div id="commuter_info" class="tab-content" style="display: none;">
           <div class="commuter-display">
-            <div class="row">
-              <div class="col-md-8">
-                <h2><i class="bx bx-bus"></i> Public Transport Information</h2>
-                <p class="mb-0">Real-time schedules and arrival estimates for commuters</p>
-              </div>
-              <div class="col-md-4 text-end">
-                <div class="current-time">
-                  <h4 id="currentTime"><?php echo date('H:i:s'); ?></h4>
-                  <p><?php echo date('l, F j, Y'); ?></p>
-                </div>
-              </div>
-            </div>
+            <h3><i class="bx bx-group"></i> Commuter Information Portal</h3>
+            <p>Real-time information for public transport users</p>
           </div>
           
           <div class="row mt-4">
             <div class="col-md-8">
               <div class="transport-form">
-                <h4><i class="bx bx-map"></i> Available Routes</h4>
-                <div class="row" id="commuterRoutes">
-                  <?php foreach ($schedules as $schedule): ?>
-                  <div class="col-md-6 mb-3">
-                    <div class="route-info">
-                      <h5><?php echo $schedule['route_name']; ?></h5>
-                      <p class="mb-1">
-                        <i class="bx bx-map"></i> 
-                        <?php echo $schedule['start_location']; ?> → <?php echo $schedule['end_location']; ?>
-                      </p>
-                      <p class="mb-1">
-                        <i class="bx bx-time"></i> 
-                        <?php echo $schedule['first_trip']; ?> - <?php echo $schedule['last_trip']; ?>
-                      </p>
-                      <p class="mb-1">
-                        <i class="bx bx-refresh"></i> 
-                        Every <?php echo $schedule['frequency']; ?> minutes
-                      </p>
-                      <p class="mb-0">
-                        <i class="bx bx-coin"></i> 
-                        Fare: ₱<?php echo $schedule['fare']; ?>
-                      </p>
+                <h4><i class="bx bx-bell"></i> Service Announcements</h4>
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                  <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#announcementModal">
+                    <i class="bx bx-plus"></i> Add Announcement
+                  </button>
+                  <div class="form-check form-switch">
+                    <input class="form-check-input" type="checkbox" id="liveUpdates" checked>
+                    <label class="form-check-label" for="liveUpdates">Live Updates</label>
+                  </div>
+                </div>
+                
+                <div class="announcement-list">
+                  <?php foreach ($announcements as $announcement): ?>
+                  <div class="alert alert-info">
+                    <div class="d-flex justify-content-between">
+                      <h6><?php echo $announcement['title']; ?></h6>
+                      <small><?php echo date('M j, Y', strtotime($announcement['created_at'])); ?></small>
                     </div>
+                    <p><?php echo $announcement['message']; ?></p>
+                    <?php if ($announcement['end_date']): ?>
+                    <small>Valid until: <?php echo date('M j, Y', strtotime($announcement['end_date'])); ?></small>
+                    <?php endif; ?>
                   </div>
                   <?php endforeach; ?>
-                  <?php if (empty($schedules)): ?>
-                  <div class="col-12">
-                    <div class="alert alert-info">No routes available at the moment.</div>
+                  <?php if (empty($announcements)): ?>
+                  <div class="alert alert-secondary">
+                    <i class="bx bx-info-circle"></i> No active service announcements.
                   </div>
                   <?php endif; ?>
                 </div>
@@ -882,145 +898,221 @@ $on_time_performance = rand(80, 95);
             
             <div class="col-md-4">
               <div class="transport-form">
-                <h4><i class="bx bx-bell"></i> Service Announcements</h4>
-                <div id="serviceAnnouncements">
-                  <?php foreach ($announcements as $announcement): ?>
-                  <div class="alert alert-warning">
-                    <h6><?php echo $announcement['title']; ?></h6>
-                    <p class="mb-1"><?php echo $announcement['message']; ?></p>
-                    <small>Posted: <?php echo date('M j, g:i a', strtotime($announcement['created_at'])); ?></small>
+                <h4><i class="bx bx-stats"></i> Commuter Stats</h4>
+                <div class="stats-container">
+                  <div class="stat-card">
+                    <h5>Peak Hours</h5>
+                    <p>7:00-9:00 AM<br>5:00-7:00 PM</p>
                   </div>
-                  <?php endforeach; ?>
-                  <?php if (empty($announcements)): ?>
-                  <div class="alert alert-info">No current announcements.</div>
-                  <?php endif; ?>
+                  <div class="stat-card">
+                    <h5>Popular Routes</h5>
+                    <p>City Center - Suburbs<br>Market - Terminal</p>
+                  </div>
                 </div>
                 
-                <div class="mt-4">
-                  <h5><i class="bx bx-support"></i> Contact Information</h5>
-                  <ul class="list-group">
-                    <li class="list-group-item">
-                      <i class="bx bx-phone"></i> Transport Hotline: (02) 1234-5678
-                    </li>
-                    <li class="list-group-item">
-                      <i class="bx bx-envelope"></i> Email: transport@lgu4.gov.ph
-                    </li>
-                    <li class="list-group-item">
-                      <i class="bx bx-map"></i> Office: City Hall, LGU4 Complex
-                    </li>
-                  </ul>
-                </div>
+                <h5 class="mt-4">Route Popularity</h5>
+                <canvas id="routePopularityChart"></canvas>
               </div>
+            </div>
+          </div>
+          
+          <div class="transport-form mt-4">
+            <h4><i class="bx bx-map-alt"></i> Interactive Route Map</h4>
+            <div id="routeMap" style="height: 300px; background-color: #f0f0f0; border-radius: 8px; display: flex; align-items: center; justify-content: center;">
+              <p class="text-muted">Interactive map visualization would appear here</p>
             </div>
           </div>
         </div>
       </main>
     </section>
     
+    <!-- Announcement Modal -->
+    <div class="modal fade" id="announcementModal" tabindex="-1" aria-hidden="true">
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title">Add Service Announcement</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body">
+            <form id="announcementForm">
+              <div class="mb-3">
+                <label class="form-label">Title</label>
+                <input type="text" class="form-control" name="title" required>
+              </div>
+              <div class="mb-3">
+                <label class="form-label">Message</label>
+                <textarea class="form-control" name="message" rows="3" required></textarea>
+              </div>
+              <div class="mb-3">
+                <label class="form-label">Valid Until (optional)</label>
+                <input type="date" class="form-control" name="end_date">
+              </div>
+            </form>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+            <button type="button" class="btn btn-primary" onclick="saveAnnouncement()">Save Announcement</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
-      // Tab navigation
+      // Tab switching function
       function openTab(evt, tabName) {
         var i, tabcontent, tabbuttons;
-        
-        // Hide all tab content
         tabcontent = document.getElementsByClassName("tab-content");
         for (i = 0; i < tabcontent.length; i++) {
           tabcontent[i].style.display = "none";
         }
-        
-        // Remove active class from all buttons
         tabbuttons = document.getElementsByClassName("tab-button");
         for (i = 0; i < tabbuttons.length; i++) {
           tabbuttons[i].className = tabbuttons[i].className.replace(" active", "");
         }
-        
-        // Show the specific tab content and add active class to the button
         document.getElementById(tabName).style.display = "block";
         evt.currentTarget.className += " active";
       }
       
-      // Update current time for commuter display
-      function updateTime() {
-        const now = new Date();
-        document.getElementById('currentTime').innerHTML = now.toLocaleTimeString();
-      }
-      setInterval(updateTime, 1000);
-      
-      // Initialize route performance chart
-      const ctx = document.getElementById('routePerformanceChart').getContext('2d');
-      const routeChart = new Chart(ctx, {
-        type: 'bar',
-        data: {
-          labels: ['Route A', 'Route B', 'Route C', 'Route D', 'Route E'],
-          datasets: [{
-            label: 'On-Time Performance %',
-            data: [92, 85, 78, 88, 95],
-            backgroundColor: 'rgba(54, 162, 235, 0.5)',
-            borderColor: 'rgba(54, 162, 235, 1)',
-            borderWidth: 1
-          }]
-        },
-        options: {
-          scales: {
-            y: {
-              beginAtZero: true,
-              max: 100
+      // Initialize charts
+      function initCharts() {
+        // Route Performance Chart
+        const perfCtx = document.getElementById('routePerformanceChart').getContext('2d');
+        new Chart(perfCtx, {
+          type: 'bar',
+          data: {
+            labels: ['Route A', 'Route B', 'Route C', 'Route D', 'Route E'],
+            datasets: [{
+              label: 'On-Time Performance (%)',
+              data: [92, 85, 78, 88, 95],
+              backgroundColor: 'rgba(54, 162, 235, 0.5)',
+              borderColor: 'rgba(54, 162, 235, 1)',
+              borderWidth: 1
+            }]
+          },
+          options: {
+            responsive: true,
+            scales: {
+              y: {
+                beginAtZero: true,
+                max: 100
+              }
             }
           }
-        }
-      });
-      
-      // Export schedules function
-      function exportSchedules() {
-        alert('Export functionality would be implemented here. In a real application, this would generate a CSV or PDF file.');
+        });
+        
+        // Route Popularity Chart
+        const popCtx = document.getElementById('routePopularityChart').getContext('2d');
+        new Chart(popCtx, {
+          type: 'doughnut',
+          data: {
+            labels: ['Route A', 'Route B', 'Route C', 'Route D'],
+            datasets: [{
+              data: [35, 25, 20, 20],
+              backgroundColor: [
+                'rgba(255, 99, 132, 0.7)',
+                'rgba(54, 162, 235, 0.7)',
+                'rgba(255, 206, 86, 0.7)',
+                'rgba(75, 192, 192, 0.7)'
+              ]
+            }]
+          },
+          options: {
+            responsive: true,
+            plugins: {
+              legend: {
+                position: 'bottom'
+              }
+            }
+          }
+        });
       }
       
-      // Edit schedule function
+      // Initialize on page load
+      document.addEventListener('DOMContentLoaded', function() {
+        initCharts();
+        
+        // Profile dropdown
+        const profileBtn = document.getElementById('profile-btn');
+        const dropdownMenu = document.getElementById('dropdown-menu');
+        
+        profileBtn.addEventListener('click', function(e) {
+          e.preventDefault();
+          dropdownMenu.style.display = dropdownMenu.style.display === 'block' ? 'none' : 'block';
+        });
+        
+        // Close dropdown when clicking outside
+        document.addEventListener('click', function(e) {
+          if (!profileBtn.contains(e.target) && !dropdownMenu.contains(e.target)) {
+            dropdownMenu.style.display = 'none';
+          }
+        });
+        
+        // Avatar modal
+        const avatar = document.getElementById('profileAvatar');
+        const modal = document.getElementById('avatarModal');
+        const modalImg = document.getElementById('modalImage');
+        const closeBtn = document.querySelector('.close');
+        
+        avatar.addEventListener('click', function() {
+          modal.style.display = 'block';
+          modalImg.src = this.src;
+        });
+        
+        closeBtn.addEventListener('click', function() {
+          modal.style.display = 'none';
+        });
+        
+        window.addEventListener('click', function(e) {
+          if (e.target === modal) {
+            modal.style.display = 'none';
+          }
+        });
+      });
+      
+      // Form validation
+      function validateTimetableForm() {
+        const form = document.getElementById('timetableForm');
+        const operatingDays = form.querySelectorAll('input[name="operating_days[]"]:checked');
+        
+        if (operatingDays.length === 0) {
+          alert('Please select at least one operating day.');
+          return false;
+        }
+        
+        return true;
+      }
+      
+      // Export schedules
+      function exportSchedules() {
+        alert('Export functionality would be implemented here.');
+      }
+      
+      // Edit schedule
       function editSchedule(routeId) {
         alert('Edit functionality for route ' + routeId + ' would be implemented here.');
       }
       
-      // Delete schedule function
+      // Delete schedule
       function deleteSchedule(routeId) {
         if (confirm('Are you sure you want to delete this schedule?')) {
           alert('Delete functionality for route ' + routeId + ' would be implemented here.');
         }
       }
       
-      // Update ETA function
+      // Update ETA
       function updateETA() {
         alert('Update ETA functionality would be implemented here.');
       }
       
-      // Profile dropdown functionality
-      document.getElementById('profile-btn').addEventListener('click', function(e) {
-        e.preventDefault();
-        const dropdown = document.getElementById('dropdown-menu');
-        dropdown.style.display = dropdown.style.display === 'block' ? 'none' : 'block';
-      });
-      
-      // Close dropdown when clicking elsewhere
-      window.addEventListener('click', function(e) {
-        if (!e.target.matches('#profile-btn') && !e.target.matches('#profile-btn img')) {
-          document.getElementById('dropdown-menu').style.display = 'none';
-        }
-      });
-      
-      // Modal functionality for avatar
-      const modal = document.getElementById("avatarModal");
-      const modalImg = document.getElementById("modalImage");
-      const avatar = document.getElementById("profileAvatar");
-      
-      avatar.onclick = function() {
-        modal.style.display = "block";
-        modalImg.src = this.src;
-      }
-      
-      const span = document.getElementsByClassName("close")[0];
-      span.onclick = function() {
-        modal.style.display = "none";
+      // Save announcement
+      function saveAnnouncement() {
+        alert('Save announcement functionality would be implemented here.');
+        // Close modal
+        const modal = bootstrap.Modal.getInstance(document.getElementById('announcementModal'));
+        modal.hide();
       }
     </script>
   </body>
