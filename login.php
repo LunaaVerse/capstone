@@ -752,7 +752,7 @@ if (empty($_SESSION['user_id']) && isset($_COOKIE['remember_me'])) {
         <div class="auth-wrapper">
             <!-- Branding Section -->
             <div class="auth-brand">
-                <div class="brand-logo">
+                
                     <img src="img/ttm.png" alt="TTM Logo" style="width: 175px; height: 175px;">
                 </div>
                 <h1 class="brand-title">TTM</h1>
