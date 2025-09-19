@@ -20,14 +20,16 @@ $verificationMethod = '';
 $emailError = false;
 
 // Process form when submitted
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    // Check if this is a verification code submission
-    if (isset($_POST['verify_code'])) {
-        $submittedCode = implode('', $_POST['verification_code']);
-        $storedCode = $_SESSION['verification_code'];
-        $verificationMethod = $_SESSION['verification_method'];
-        
-        if ($submittedCode === $storedCode) {
+$submittedCode = implode('', $_POST['verification_code']);
+$storedCode = isset($_SESSION['verification_code']) ? $_SESSION['verification_code'] : '';
+
+// Add additional validation
+if (empty($storedCode)) {
+    $errors[] = "Verification session expired. Please try registering again.";
+    $verificationSent = false;
+    unset($_SESSION['verification_pending']);
+    unset($_SESSION['reg_data']);
+} elseif ($submittedCode === $storedCode) {
             // Code matches - complete registration
             $firstName = $_SESSION['reg_data']['firstName'];
             $lastName = $_SESSION['reg_data']['lastName'];
