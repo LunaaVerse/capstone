@@ -753,7 +753,7 @@ if (empty($_SESSION['user_id']) && isset($_COOKIE['remember_me'])) {
             <!-- Branding Section -->
             <div class="auth-brand">
                 <div class="brand-logo">
-                    <img src="img/ttm.png" alt="TTM Logo" style="width: 175px; height: 175px;">
+                    <i class="fas fa-traffic-light"></i>
                 </div>
                 <h1 class="brand-title">TTM</h1>
                 <p class="brand-subtitle">Traffic and Transport Management System</p>
@@ -811,9 +811,13 @@ if (empty($_SESSION['user_id']) && isset($_COOKIE['remember_me'])) {
                                placeholder="Enter your password" required>
                     </div>
                     
-                   
+                <!---    <div class="form-actions">
+                        <div class="checkbox-wrapper">
+                            <input type="checkbox" id="rememberMe" name="remember">
+                            <label for="rememberMe">Remember me</label>
+                        </div>
                         <a href="#" id="forgotPasswordLink" class="forgot-link">Forgot password?</a>
-                    </div>
+                    </div> --->
                     
                     <button type="submit" name="login" class="btn-primary">
                         Sign In
