@@ -56,7 +56,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (empty($errors)) {
             try {
                 // Generate a unique route ID
-                $route_id = 'ROUTE_' . time() . '_' . rand(1000, 9999);
+              
+          $route_id = 'RT_' . substr(uniqid(), -8) . '_' . rand(100, 999);
                 $operating_days = implode(',', $_POST['operating_days']);
                 
                 $stmt = $pdo->prepare("INSERT INTO transport_routes (route_id, route_name, vehicle_type, fare, start_location, end_location, first_trip, last_trip, frequency, operating_days, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
