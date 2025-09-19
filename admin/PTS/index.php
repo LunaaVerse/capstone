@@ -610,7 +610,7 @@ if (in_array($user_role, ['admin', 'officer'])) {
             </div>
             
             <!-- My Permits Tab -->
-            <div id="my_permits" class="tab-content" style="display: none;">
+            <div id="permits" class="tab-content" style="display: none;">
                 <div class="row">
                     <div class="col-md-12">
                         <div class="permit-form">
