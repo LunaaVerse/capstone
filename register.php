@@ -907,7 +907,7 @@ if (isset($_SESSION['verification_error'])) {
                 
                 <div class="auth-switch">
                     <span class="auth-switch-text">Already have an account?</span>
-                    <a href="login.php" class="auth-switch-link">Sign in</a>
+                    <a href="../login.php" class="auth-switch-link">Sign in</a>
                 </div>
             </div>
         </div>
