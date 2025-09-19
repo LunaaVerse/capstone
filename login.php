@@ -165,7 +165,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['login'])) {
                         
                         // Redirect based on user role
                         $_SESSION['user_logged_in'] = true;
-                        header("Location:admin/dashboard.html");
+                        header("Location: ttm/admin/dashbaord.html");
                         exit();
                     }
                 } else {
@@ -214,7 +214,7 @@ if (empty($_SESSION['user_id']) && isset($_COOKIE['remember_me'])) {
             $_SESSION['last_activity'] = time();
             
             $_SESSION['user_logged_in'] = true;
-            header("Location: admin/dashbaord.html");
+            header("Location: ../admin/dashboard.php");
             exit();
         }
     }
