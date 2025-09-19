@@ -1,6 +1,13 @@
 <?php
 session_start();
-require_once 'config/database.php'; // Database connection file
+require_once 'config/database.php'; // Your database connection file
+
+// Create database connection
+try {
+    $pdo = getDBConnection('ttm_ttm');
+} catch(Exception $e) {
+    die("Database connection failed: " . $e->getMessage());
+}
 
 // Check if user is logged in
 if (!isset($_SESSION['user_id'])) {
@@ -8,380 +15,348 @@ if (!isset($_SESSION['user_id'])) {
     exit();
 }
 
-// Database connection
-try {
-    $pdo = new PDO("mysql:host=" . DB_HOST . ";dbname=" . DB_NAME, DB_USER, DB_PASS);
-    $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-} catch (PDOException $e) {
-    die("Database connection failed: " . $e->getMessage());
-}
+// Get user information
+$user_id = $_SESSION['user_id'];
+$stmt = $pdo->prepare("SELECT * FROM users WHERE user_id = ?");
+$stmt->execute([$user_id]);
+$user = $stmt->fetch();
 
-// Handle form submission
+// Initialize error array
+$errors = [];
+
+// Handle form submissions
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    if (isset($_POST['create_traffic_log'])) {
-        $location = $_POST['location'];
-        $log_date = $_POST['log_date'];
-        $log_time = $_POST['log_time'];
-        $status_id = $_POST['status_id'];
-        $average_speed = isset($_POST['average_speed']) ? $_POST['average_speed'] : null;
-        $vehicle_count = isset($_POST['vehicle_count']) ? $_POST['vehicle_count'] : null;
-        $notes = $_POST['notes'];
-        $reported_by = $_SESSION['user_id'];
+    if (isset($_POST['save_schedule'])) {
+        // Validate required fields
+        $required_fields = ['route_name', 'vehicle_type', 'fare', 'start_location', 'end_location', 'first_trip', 'last_trip', 'frequency'];
+        $errors = [];
         
-        try {
-          $stmt = $pdo->prepare("INSERT INTO traffic_logs (user_id, location, log_date, log_time, status_id, average_speed_kmh, vehicle_count, notes, reported_by) 
-                      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
-$stmt->execute([$_SESSION['user_id'], $location, $log_date, $log_time, $status_id, $average_speed, $vehicle_count, $notes, $reported_by]);
-            
-            $_SESSION['success_message'] = "Traffic log created successfully!";
-            header("Location: " . $_SERVER['PHP_SELF']);
-            exit();
-        } catch (PDOException $e) {
-            $_SESSION['error_message'] = "Error creating traffic log: " . $e->getMessage();
+        foreach ($required_fields as $field) {
+            if (empty(trim($_POST[$field]))) {
+                $errors[] = ucfirst(str_replace('_', ' ', $field)) . " is required.";
+            }
         }
-    }
-    
-    // Handle log deletion
-    if (isset($_POST['delete_log'])) {
-        $log_id = $_POST['log_id'];
         
-        try {
-            $stmt = $pdo->prepare("DELETE FROM traffic_logs WHERE log_id = ?");
-            $stmt->execute([$log_id]);
-            
-            $_SESSION['success_message'] = "Traffic log deleted successfully!";
-            header("Location: " . $_SERVER['PHP_SELF']);
-            exit();
-        } catch (PDOException $e) {
-            $_SESSION['error_message'] = "Error deleting traffic log: " . $e->getMessage();
+        // Validate operating days
+        if (!isset($_POST['operating_days']) || empty($_POST['operating_days'])) {
+            $errors[] = "At least one operating day must be selected.";
         }
+        
+        // Validate fare is numeric
+        if (!empty($_POST['fare']) && !is_numeric($_POST['fare'])) {
+            $errors[] = "Fare must be a valid number.";
+        }
+        
+        // Validate frequency is numeric
+        if (!empty($_POST['frequency']) && !is_numeric($_POST['frequency'])) {
+            $errors[] = "Frequency must be a valid number.";
+        }
+        
+        // If no validation errors, proceed with saving
+        if (empty($errors)) {
+            try {
+                // Generate a unique route ID
+                $route_id = 'ROUTE_' . time() . '_' . rand(1000, 9999);
+                $operating_days = implode(',', $_POST['operating_days']);
+                
+                $stmt = $pdo->prepare("INSERT INTO transport_routes (route_id, route_name, vehicle_type, fare, start_location, end_location, first_trip, last_trip, frequency, operating_days, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+                $result = $stmt->execute([
+                    $route_id,
+                    $_POST['route_name'],
+                    $_POST['vehicle_type'],
+                    $_POST['fare'],
+                    $_POST['start_location'],
+                    $_POST['end_location'],
+                    $_POST['first_trip'],
+                    $_POST['last_trip'],
+                    $_POST['frequency'],
+                    $operating_days,
+                    $user_id
+                ]);
+                
+                if ($result) {
+                    $_SESSION['success_message'] = "Route schedule saved successfully!";
+                    // Clear form data after successful submission
+                    unset($_POST);
+                } else {
+                    $_SESSION['error_message'] = "Failed to save route schedule. Please try again.";
+                }
+            } catch (PDOException $e) {
+                // Check if it's a duplicate entry error
+                if (strpos($e->getMessage(), 'Duplicate entry') !== false) {
+                    $_SESSION['error_message'] = "A route with this name already exists.";
+                } else {
+                    $_SESSION['error_message'] = "Database error: " . $e->getMessage();
+                }
+            }
+        } else {
+            $_SESSION['error_message'] = implode("<br>", $errors);
+        }
+        
+        // Redirect to avoid form resubmission
+        header("Location: " . $_SERVER['PHP_SELF']);
+        exit();
+    } 
+    elseif (isset($_POST['calculate_eta'])) {
+        // Calculate ETA
+        $route_id = $_POST['eta_route'];
+        $distance = floatval($_POST['distance']);
+        $traffic_condition = $_POST['traffic_condition'];
+        $additional_stops = intval($_POST['additional_stops']);
+        
+        // Calculate ETA based on traffic conditions
+        $base_speed = 25; // km/h
+        if ($traffic_condition === 'light') $base_speed = 35;
+        elseif ($traffic_condition === 'moderate') $base_speed = 25;
+        elseif ($traffic_condition === 'heavy') $base_speed = 15;
+        
+        // Add time for additional stops (2 minutes per stop)
+        $stop_time = $additional_stops * 2;
+        
+        // Calculate travel time
+        $travel_time_hours = $distance / $base_speed;
+        $estimated_minutes = round($travel_time_hours * 60) + $stop_time;
+        
+        // Calculate arrival time
+        $arrival_time = date('Y-m-d H:i:s', strtotime("+$estimated_minutes minutes"));
+        
+        // Save to database
+        try {
+            $stmt = $pdo->prepare("INSERT INTO vehicle_locations (route_id, vehicle_id, current_location, target_stop, distance, traffic_condition, additional_stops, estimated_minutes, arrival_time, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+            $result = $stmt->execute([
+                $route_id,
+                $_POST['vehicle_id'],
+                $_POST['current_location'],
+                $_POST['target_stop'],
+                $distance,
+                $traffic_condition,
+                $additional_stops,
+                $estimated_minutes,
+                $arrival_time,
+                $user_id
+            ]);
+            
+            if ($result) {
+                $_SESSION['eta_data'] = [
+                    'vehicle_id' => $_POST['vehicle_id'],
+                    'route' => $_POST['eta_route'],
+                    'current_location' => $_POST['current_location'],
+                    'target_stop' => $_POST['target_stop'],
+                    'estimated_minutes' => $estimated_minutes,
+                    'arrival_time' => date('H:i:s', strtotime($arrival_time)),
+                    'timestamp' => date('H:i:s')
+                ];
+            } else {
+                $_SESSION['error_message'] = "Failed to calculate ETA. Please try again.";
+            }
+        } catch (PDOException $e) {
+            $_SESSION['error_message'] = "Database error: " . $e->getMessage();
+        }
+        
+        // Redirect to avoid form resubmission
+        header("Location: " . $_SERVER['PHP_SELF']);
+        exit();
     }
 }
 
-// Get traffic status types
-$status_types = [];
-try {
-    $stmt = $pdo->query("SELECT * FROM traffic_status_types WHERE is_active = 1 ORDER BY severity_level");
-    $status_types = $stmt->fetchAll(PDO::FETCH_ASSOC);
-} catch (PDOException $e) {
-    $error = "Error fetching status types: " . $e->getMessage();
-}
+// Get all routes for dropdown
+$routes = $pdo->query("SELECT * FROM transport_routes ORDER BY route_name")->fetchAll();
 
-// Get recent logs
-$recent_logs = [];
-try {
-    $stmt = $pdo->prepare("SELECT tl.*, tst.status_name, tst.color_code 
-                          FROM traffic_logs tl 
-                          JOIN traffic_status_types tst ON tl.status_id = tst.status_id 
-                          ORDER BY tl.created_at DESC 
-                          LIMIT 5");
-    $stmt->execute();
-    $recent_logs = $stmt->fetchAll(PDO::FETCH_ASSOC);
-} catch (PDOException $e) {
-    $error = "Error fetching recent logs: " . $e->getMessage();
-}
+// Get schedules for display
+$schedules = $pdo->query("SELECT * FROM transport_routes ORDER BY created_at DESC")->fetchAll();
 
-// Get all logs for report
-$all_logs = [];
-try {
-    $stmt = $pdo->prepare("SELECT tl.*, tst.status_name, tst.color_code 
-                          FROM traffic_logs tl 
-                          JOIN traffic_status_types tst ON tl.status_id = tst.status_id 
-                          ORDER BY tl.log_date DESC, tl.log_time DESC");
-    $stmt->execute();
-    $all_logs = $stmt->fetchAll(PDO::FETCH_ASSOC);
-} catch (PDOException $e) {
-    $error = "Error fetching all logs: " . $e->getMessage();
-}
+// Get recent ETAs
+$etas = $pdo->query("SELECT vl.*, tr.route_name 
+                    FROM vehicle_locations vl 
+                    JOIN transport_routes tr ON vl.route_id = tr.route_id 
+                    ORDER BY vl.created_at DESC LIMIT 10")->fetchAll();
 
-// Get dashboard statistics
-$stats = [
-    'total_logs_today' => 0,
-    'active_incidents' => 0,
-    'congestion_points' => 0,
-    'average_speed' => 0
-];
+// Get service announcements
+$announcements = $pdo->query("SELECT * FROM service_announcements WHERE end_date IS NULL OR end_date >= CURDATE() ORDER BY created_at DESC")->fetchAll();
 
-try {
-    $today = date('Y-m-d');
-    
-    // Total logs today
-    $stmt = $pdo->prepare("SELECT COUNT(*) as count FROM traffic_logs WHERE log_date = ?");
-    $stmt->execute([$today]);
-    $result = $stmt->fetch(PDO::FETCH_ASSOC);
-    $stats['total_logs_today'] = $result['count'];
-    
-    // Active incidents (high traffic)
-    $stmt = $pdo->prepare("SELECT COUNT(*) as count FROM traffic_logs tl 
-                          JOIN traffic_status_types tst ON tl.status_id = tst.status_id 
-                          WHERE tl.log_date = ? AND tst.severity_level = 3");
-    $stmt->execute([$today]);
-    $result = $stmt->fetch(PDO::FETCH_ASSOC);
-    $stats['active_incidents'] = $result['count'];
-    
-    // Congestion points (medium traffic)
-    $stmt = $pdo->prepare("SELECT COUNT(*) as count FROM traffic_logs tl 
-                          JOIN traffic_status_types tst ON tl.status_id = tst.status_id 
-                          WHERE tl.log_date = ? AND tst.severity_level = 2");
-    $stmt->execute([$today]);
-    $result = $stmt->fetch(PDO::FETCH_ASSOC);
-    $stats['congestion_points'] = $result['count'];
-    
-    // Average speed
-    $stmt = $pdo->prepare("SELECT AVG(average_speed_kmh) as avg_speed FROM traffic_logs 
-                          WHERE log_date = ? AND average_speed_kmh IS NOT NULL");
-    $stmt->execute([$today]);
-    $result = $stmt->fetch(PDO::FETCH_ASSOC);
-    $stats['average_speed'] = round($result['avg_speed'] ?? 0, 1);
-    
-} catch (PDOException $e) {
-    $error = "Error fetching statistics: " . $e->getMessage();
-}
+// Get stats for dashboard
+$active_routes = $pdo->query("SELECT COUNT(*) as count FROM transport_routes WHERE status = 'active'")->fetch()['count'];
+$total_vehicles = $pdo->query("SELECT COUNT(DISTINCT vehicle_id) as count FROM vehicle_locations")->fetch()['count'];
+$daily_passengers = rand(2000, 2500); // This would come from actual data in a real system
 
-// Get traffic status distribution for chart
-$status_distribution = [];
-try {
-    $stmt = $pdo->query("SELECT tst.status_name, COUNT(tl.log_id) as count, tst.color_code 
-                        FROM traffic_status_types tst 
-                        LEFT JOIN traffic_logs tl ON tst.status_id = tl.status_id 
-                        WHERE tst.is_active = 1 
-                        GROUP BY tst.status_id, tst.status_name, tst.color_code");
-    $status_distribution = $stmt->fetchAll(PDO::FETCH_ASSOC);
-} catch (PDOException $e) {
-    $error = "Error fetching status distribution: " . $e->getMessage();
-}
+// Calculate on-time performance (simplified)
+$on_time_performance = rand(80, 95);
 ?>
 <!DOCTYPE html>
 <html lang="en">
-<head>
+  <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Traffic and Transport Management - Traffic Monitoring</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet" />
-    <link href="https://unpkg.com/boxicons@2.0.9/css/boxicons.min.css" rel="stylesheet" />
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css"
+      rel="stylesheet"
+    />
+    <link
+      href="https://unpkg.com/boxicons@2.0.9/css/boxicons.min.css"
+      rel="stylesheet"
+    />
     <link rel="stylesheet" href="css/style1.css" />
     <link rel="stylesheet" href="css/viewprofile.css" />
+    <title>LGU4 - Public Transport Sync</title>
     <style>
-        /* Traffic Monitoring Specific Styles */
-        .traffic-status-card {
-            border-left: 4px solid;
-            transition: all 0.3s;
-            border-radius: 8px;
-            background: white;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
-        }
-        
-        .traffic-status-card:hover {
-            transform: translateY(-3px);
-            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
-        }
-        
-        .traffic-low {
-            border-left-color: #06d6a0;
-            background: linear-gradient(to right, rgba(6, 214, 160, 0.05), white);
-        }
-        
-        .traffic-medium {
-            border-left-color: #ffd166;
-            background: linear-gradient(to right, rgba(255, 209, 102, 0.05), white);
-        }
-        
-        .traffic-high {
-            border-left-color: #e63946;
-            background: linear-gradient(to right, rgba(230, 57, 70, 0.05), white);
-        }
-        
-        .status-indicator {
-            display: inline-block;
-            width: 12px;
-            height: 12px;
-            border-radius: 50%;
-            margin-right: 5px;
-        }
-        
-        .status-low {
-            background-color: #06d6a0;
-        }
-        
-        .status-medium {
-            background-color: #ffd166;
-        }
-        
-        .status-high {
-            background-color: #e63946;
-        }
-        
-        .traffic-form {
-            background: white;
-            border-radius: 10px;
-            padding: 2rem;
-            box-shadow: 0 5px 15px rgba(0,0,0,0.05);
-            border-top: 3px solid #1d3557;
-        }
-        
-        .report-table {
-            max-height: 500px;
-            overflow-y: auto;
-        }
-        
-        .tab-content {
-            padding: 20px;
-            background: white;
-            border-radius: 0 0 10px 10px;
-            box-shadow: 0 5px 15px rgba(0,0,0,0.05);
-        }
-        
+      /* Public Transport Sync Specific Styles */
+      .transport-card {
+        border-left: 4px solid;
+        transition: all 0.3s;
+        border-radius: 8px;
+        background: white;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+      }
+      
+      .transport-card:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+      }
+      
+      .route-active {
+        border-left-color: #06d6a0;
+        background: linear-gradient(to right, rgba(6, 214, 160, 0.05), white);
+      }
+      
+      .route-delayed {
+        border-left-color: #ffd166;
+        background: linear-gradient(to right, rgba(255, 209, 102, 0.05), white);
+      }
+      
+      .route-inactive {
+        border-left-color: #e63946;
+        background: linear-gradient(to right, rgba(230, 57, 70, 0.05), white);
+      }
+      
+      .status-indicator {
+        display: inline-block;
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        margin-right: 5px;
+      }
+      
+      .status-active {
+        background-color: #06d6a0;
+      }
+      
+      .status-delayed {
+        background-color: #ffd166;
+      }
+      
+      .status-inactive {
+        background-color: #e63946;
+      }
+      
+      .transport-form {
+        background: white;
+        border-radius: 10px;
+        padding: 2rem;
+        box-shadow: 0 5px 15px rgba(0,0,0,0.05);
+        border-top: 3px solid #1d3557;
+      }
+      
+      .schedule-table {
+        max-height: 500px;
+        overflow-y: auto;
+      }
+      
+      .tab-content {
+        padding: 20px;
+        background: white;
+        border-radius: 0 0 10px 10px;
+        box-shadow: 0 5px 15px rgba(0,0,0,0.05);
+      }
+      
+      .tab-buttons {
+        display: flex;
+        gap: 10px;
+        margin-bottom: 20px;
+        flex-wrap: wrap;
+      }
+      
+      .tab-button {
+        padding: 10px 20px;
+        background: #f8f9fa;
+        border: none;
+        border-radius: 5px 5px 0 0;
+        cursor: pointer;
+        transition: all 0.3s;
+        font-size: 14px;
+      }
+      
+      .tab-button:hover {
+        background: #e9ecef;
+      }
+      
+      .tab-button.active {
+        background: #1d3557;
+        color: white;
+      }
+      
+      .vehicle-status {
+        width: 60px;
+        height: 60px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 auto;
+        color: white;
+        font-weight: bold;
+        font-size: 12px;
+      }
+      
+      .eta-display {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 15px;
+        border-radius: 10px;
+        text-align: center;
+        margin-bottom: 15px;
+      }
+      
+      .route-info {
+        background: #f8f9fa;
+        padding: 15px;
+        border-radius: 8px;
+        margin-bottom: 15px;
+      }
+      
+      .commuter-display {
+        background: linear-gradient(135deg, #74b9ff 0%, #0984e3 100%);
+        color: white;
+        padding: 20px;
+        border-radius: 15px;
+        margin-bottom: 20px;
+      }
+      
+      @media (max-width: 768px) {
         .tab-buttons {
-            display: flex;
-            gap: 10px;
-            margin-bottom: 20px;
-            flex-wrap: wrap;
+          flex-direction: column;
         }
         
         .tab-button {
-            padding: 10px 20px;
-            background: #f8f9fa;
-            border: none;
-            border-radius: 5px 5px 0 0;
-            cursor: pointer;
-            transition: all 0.3s;
-            font-size: 14px;
+          border-radius: 5px;
+          margin-bottom: 5px;
         }
         
-        .tab-button:hover {
-            background: #e9ecef;
+        .transport-form {
+          padding: 1rem;
         }
-        
-        .tab-button.active {
-            background: #1d3557;
-            color: white;
-        }
-        
-        .traffic-signal {
-            width: 80px;
-            height: 80px;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            margin: 0 auto;
-            color: white;
-            font-weight: bold;
-            font-size: 12px;
-        }
-
-        .stats-container {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 20px;
-            margin-bottom: 30px;
-        }
-
-        .stat-card {
-            background: white;
-            padding: 20px;
-            border-radius: 10px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-            text-align: center;
-            border-top: 3px solid #1d3557;
-        }
-
-        .stat-card h3 {
-            font-size: 14px;
-            color: #666;
-            margin-bottom: 10px;
-        }
-
-        .stat-card p {
-            font-size: 24px;
-            font-weight: bold;
-            color: #1d3557;
-            margin: 0;
-        }
-
-        .chart-container {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
-            gap: 20px;
-            margin-bottom: 30px;
-        }
-
-        .chart {
-            background: white;
-            padding: 20px;
-            border-radius: 10px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-        }
-
-        .response-time {
-            background: white;
-            padding: 20px;
-            border-radius: 10px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-            text-align: center;
-        }
-
-        /* Alert Styles */
-        .alert-container {
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            z-index: 1050;
-            min-width: 300px;
-        }
-
-        /* Responsive Design */
-        @media (max-width: 768px) {
-            .tab-buttons {
-                flex-direction: column;
-            }
-            
-            .tab-button {
-                width: 100%;
-                text-align: center;
-            }
-            
-            .chart-container {
-                grid-template-columns: 1fr;
-            }
-            
-            .stats-container {
-                grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-            }
-        }
+      }
     </style>
-</head>
-<body>
-    <!-- Alert Container -->
-    <div class="alert-container">
-        <?php if (isset($_SESSION['success_message'])): ?>
-            <div class="alert alert-success alert-dismissible fade show" role="alert">
-                <?php echo $_SESSION['success_message']; ?>
-                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-            </div>
-            <?php unset($_SESSION['success_message']); ?>
-        <?php endif; ?>
-        
-        <?php if (isset($_SESSION['error_message'])): ?>
-            <div class="alert alert-danger alert-dismissible fade show" role="alert">
-                <?php echo $_SESSION['error_message']; ?>
-                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-            </div>
-            <?php unset($_SESSION['error_message']); ?>
-        <?php endif; ?>
-        
-        <?php if (isset($error)): ?>
-            <div class="alert alert-danger alert-dismissible fade show" role="alert">
-                <?php echo $error; ?>
-                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-            </div>
-        <?php endif; ?>
+  </head>
+  <body>
+    <div id="avatarModal" class="modal">
+      <span class="close">&times;</span>
+      <img class="modal-content" id="modalImage" />
     </div>
-
-    <section id="sidebar">
+    
+        <section id="sidebar">
         <a href="#" class="brand">
             <img
-                src="img/ttm.png"
+                src="../img/ttm.png"
                 alt="Profile Photo"
                 class="profile-avatar"
                 id="profileAvatar"
@@ -391,14 +366,14 @@ try {
         </a>
         <ul class="side-menu top">
             <li>
-                <a href="../dashboard.php">
+                <a href="../index.php">
                     <i class="bx bxs-dashboard"></i>
                     <span class="text">Dashboard</span>
                 </a>
             </li>
             <span class="separator">Main</span>
             
-            <li class="active">
+            <li>
                 <a href="../TM/index.php">
                     <i class="bx bx-car"></i>
                     <span class="text">Traffic Monitoring</span>
@@ -416,19 +391,19 @@ try {
                     <span class="text">Accident & Violation Reports</span>
                 </a>
             </li>
-            <li>
+            <li >
                 <a href="../VRD/index.php">
                     <i class="bx bx-map"></i>
                     <span class="text">Vehicle Routing & Diversion</span>
                 </a>
             </li>
-            <li>
+            <li >
                 <a href="../TSC/index.php">
                     <i class="bx bx-toggle-left"></i>
                     <span class="text">Traffic Signal Control</span>
                 </a>
             </li>
-            <li>
+            <li class="active">
                 <a href="../PT/index.php">
                     <i class="bx bx-train"></i>
                     <span class="text">Public Transport Sync</span>
@@ -444,597 +419,701 @@ try {
         <ul class="side-menu">
             <span class="separator">SETTINGS</span>
             <li>
-                <a href="Profile.php">
+                <a href="../Profile.php">
                     <i class="bx bxs-user-pin"></i>
                     <span class="text">Profile</span>
                 </a>
             </li>
             <li>
-                <a href="Settings.php">
+                <a href="../Settings.php">
                     <i class="bx bxs-cog"></i>
                     <span class="text">Settings</span>
                 </a>
             </li>
             <li>
-                <a href="logout.php" class="logout">
+                <a href="../logout.php" class="logout">
                     <i class="bx bxs-log-out-circle"></i>
                     <span class="text">Logout</span>
                 </a>
             </li>
         </ul>
     </section>
-
+    
     <section id="content">
-        <nav>
-            <a href="#" class="nav-link">Categories</a>
-            <form action="#">
-                <div class="form-input">
-                    <input type="search" placeholder="Search..." />
-                    <button type="submit" class="search-btn">
-                        <i class="bx bx-search"></i>
-                    </button>
-                </div>
-            </form>
-            <a href="#" class="notification">
-                <i class="bx bxs-bell"></i>
-                <span class="num">9+</span>
-            </a>
-            <div class="profile-dropdown">
-                <a href="#" class="profile" id="profile-btn">
-                    <img src="/placeholder.svg?height=40&width=40" />
-                </a>
-                <div class="dropdown-menu" id="dropdown-menu">
-                    <a href="Profile.php">Profile</a>
-                    <a href="Settings.php">Settings</a>
-                </div>
-            </div>
-        </nav>
-
-        <main>
-            <div class="head-title">
-                <div class="left">
-                    <h1>Traffic Monitoring</h1>
-                    <ul class="breadcrumb">
-                        <li>
-                            <a href="#">Dashboard</a>
-                        </li>
-                        <li><i class="bx bx-chevron-right"></i></li>
-                        <li>
-                            <a class="active" href="#">Traffic Monitoring</a>
-                        </li>
-                    </ul>
-                </div>
+      <nav>
+        <a href="#" class="nav-link">Categories</a>
+        <form action="#">
+          <div class="form-input">
+            <input type="search" placeholder="Search routes..." />
+            <button type="submit" class="search-btn">
+              <i class="bx bx-search"></i>
+            </button>
+          </div>
+        </form>
+        <a href="#" class="notification">
+          <i class="bx bxs-bell"></i>
+          <span class="num">5+</span>
+        </a>
+        <div class="profile-dropdown">
+          <a href="#" class="profile" id="profile-btn">
+            <img src="img/aiah.jpg" />
+          </a>
+          <div class="dropdown-menu" id="dropdown-menu">
+            <a href="Profile.php">Profile</a>
+            <a href="Settings.php">Settings</a>
+          </div>
+        </div>
+      </nav>
+      
+      <main>
+        <div class="head-title">
+          <div class="left">
+            <h1>Public Transport Sync</h1>
+            <ul class="breadcrumb">
+              <li>
+                <a href="#">Dashboard</a>
+              </li>
+              <li><i class="bx bx-chevron-right"></i></li>
+              <li>
+                <a class="active" href="#">Public Transport Sync</a>
+              </li>
+            </ul>
+          </div>
+        </div>
+        
+        <!-- Display success/error messages -->
+        <?php if (isset($_SESSION['success_message'])): ?>
+          <div class="alert alert-success alert-dismissible fade show" role="alert">
+            <?php echo $_SESSION['success_message']; ?>
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+          </div>
+          <?php unset($_SESSION['success_message']); ?>
+        <?php endif; ?>
+        
+        <?php if (isset($_SESSION['error_message'])): ?>
+          <div class="alert alert-danger alert-dismissible fade show" role="alert">
+            <?php echo $_SESSION['error_message']; ?>
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+          </div>
+          <?php unset($_SESSION['error_message']); ?>
+        <?php endif; ?>
+        
+        <div class="tab-buttons">
+          <button class="tab-button active" onclick="openTab(event, 'dashboard')">
+            <i class="bx bxs-dashboard"></i> Dashboard
+          </button>
+          <button class="tab-button" onclick="openTab(event, 'vehicle_timetable')">
+            <i class="bx bx-time"></i> Vehicle Timetable
+          </button>
+          <button class="tab-button" onclick="openTab(event, 'arrival_estimator')">
+            <i class="bx bx-map-pin"></i> Arrival Estimator
+          </button>
+          <button class="tab-button" onclick="openTab(event, 'commuter_info')">
+            <i class="bx bx-info-circle"></i> Commuter Info
+          </button>
+        </div>
+        
+        <!-- Dashboard Tab -->
+        <div id="dashboard" class="tab-content" style="display: block;">
+          <div class="dashboard-overview">
+            <h2>Public Transport Dashboard Overview</h2>
+            
+            <div class="stats-container">
+              <div class="stat-card">
+                <h3>Active Routes</h3>
+                <p id="activeRoutes"><?php echo $active_routes; ?></p>
+              </div>
+              <div class="stat-card">
+                <h3>Total Vehicles</h3>
+                <p id="totalVehicles"><?php echo $total_vehicles; ?></p>
+              </div>
+              <div class="stat-card">
+                <h3>On-Time Performance</h3>
+                <p id="onTimePerf"><?php echo $on_time_performance; ?>%</p>
+              </div>
+              <div class="stat-card">
+                <h3>Daily Passengers</h3>
+                <p id="dailyPassengers"><?php echo number_format($daily_passengers); ?></p>
+              </div>
             </div>
             
-            <div class="tab-buttons">
-                <button class="tab-button active" onclick="openTab(event, 'dashboard')">
-                    <i class="bx bxs-dashboard"></i> Dashboard
-                </button>
-                <button class="tab-button" onclick="openTab(event, 'manual_traffic_log')">
-                    <i class="bx bx-edit"></i> Manual Traffic Log
-                </button>
-                <button class="tab-button" onclick="openTab(event, 'traffic_volume_status')">
-                    <i class="bx bx-traffic-cone"></i> Traffic Volume Status
-                </button>
-                <button class="tab-button" onclick="openTab(event, 'daily_monitoring_report')">
-                    <i class="bx bx-file"></i> Daily Monitoring Report
-                </button>
-            </div>
-            
-            <!-- Dashboard Tab -->
-            <div id="dashboard" class="tab-content" style="display: block;">
-                <div class="dashboard-overview">
-                    <h2>Traffic Monitoring Dashboard Overview</h2>
-                    
-                    <div class="stats-container">
-                        <div class="stat-card">
-                            <h3>Active Traffic Incidents</h3>
-                            <p id="activeIncidents"><?php echo $stats['active_incidents']; ?></p>
-                        </div>
-                        <div class="stat-card">
-                            <h3>Congestion Points</h3>
-                            <p id="congestionPoints"><?php echo $stats['congestion_points']; ?></p>
-                        </div>
-                        <div class="stat-card">
-                            <h3>Average Speed</h3>
-                            <p id="averageSpeed"><?php echo $stats['average_speed']; ?> km/h</p>
-                        </div>
-                        <div class="stat-card">
-                            <h3>Total Logs Today</h3>
-                            <p id="totalLogs"><?php echo $stats['total_logs_today']; ?></p>
-                        </div>
-                    </div>
-
-                    <div class="chart-container">
-                        <div class="chart">
-                            <h3>Traffic Volume Trends (Last 24 Hours)</h3>
-                            <canvas id="trafficTrendChart"></canvas>
-                        </div>
-                        <div class="chart">
-                            <h3>Traffic Status Distribution</h3>
-                            <canvas id="statusDistributionChart"></canvas>
-                        </div>
-                    </div>
-
-                    <div class="response-time">
-                        <h3>Peak Traffic Hours</h3>
-                        <p>7:30-9:30 AM | 4:30-7:00 PM</p>
-                        <div style="width: 80%; margin: 0 auto">
-                            <canvas id="peakHoursChart"></canvas>
-                        </div>
-                    </div>
+            <div class="row mt-4">
+              <div class="col-md-8">
+                <div class="transport-form">
+                  <h4><i class="bx bx-line-chart"></i> Route Performance</h4>
+                  <canvas id="routePerformanceChart"></canvas>
                 </div>
+              </div>
+              <div class="col-md-4">
+                <div class="transport-form">
+                  <h4><i class="bx bx-bus"></i> Vehicle Status</h4>
+                  <?php foreach ($schedules as $schedule): ?>
+                  <div class="transport-card route-active p-3 mb-3">
+                    <div class="d-flex justify-content-between align-items-center">
+                      <div>
+                        <h6><?php echo $schedule['route_name']; ?></h6>
+                        <small>
+                          <?php 
+                          $vehicle_count = $pdo->prepare("SELECT COUNT(DISTINCT vehicle_id) as count FROM vehicle_locations WHERE route_id = ?");
+                          $vehicle_count->execute([$schedule['route_id']]);
+                          $count = $vehicle_count->fetch()['count'];
+                          echo $count . " vehicles active";
+                          ?>
+                        </small>
+                      </div>
+                      <div class="vehicle-status" style="background-color: #06d6a0;">
+                        Active
+                      </div>
+                    </div>
+                  </div>
+                  <?php endforeach; ?>
+                </div>
+              </div>
             </div>
-            
-            <!-- Manual Traffic Log Tab -->
-            <div id="manual_traffic_log" class="tab-content" style="display: none;">
-                <div class="row">
+          </div>
+        </div>
+        
+        <!-- Vehicle Timetable Tab -->
+        <div id="vehicle_timetable" class="tab-content" style="display: none;">
+          <div class="row">
+            <div class="col-md-5">
+              <div class="transport-form">
+                <h4><i class="bx bx-time"></i> Add/Edit Route Schedule</h4>
+                <form id="timetableForm" method="POST">
+                  <input type="hidden" name="save_schedule" value="1">
+                  <div class="mb-3">
+                    <label class="form-label">Route Name</label>
+                    <input type="text" class="form-control" name="route_name" placeholder="e.g., Route A - City Center" value="<?php echo isset($_POST['route_name']) ? htmlspecialchars($_POST['route_name']) : ''; ?>" required>
+                  </div>
+                  
+                  <div class="row mb-3">
                     <div class="col-md-6">
-                        <div class="traffic-form">
-                            <h4><i class="bx bx-edit"></i> Create Traffic Log</h4>
-                            <form id="trafficLogForm" method="POST">
-                                <div class="mb-3">
-                                    <label class="form-label">Location *</label>
-                                    <input type="text" class="form-control" name="location" placeholder="Enter location or intersection" required>
-                                </div>
-                                
-                                <div class="row mb-3">
-                                    <div class="col-md-6">
-                                        <label class="form-label">Date *</label>
-                                        <input type="date" class="form-control" name="log_date" value="<?php echo date('Y-m-d'); ?>" required>
-                                    </div>
-                                    <div class="col-md-6">
-                                        <label class="form-label">Time *</label>
-                                        <input type="time" class="form-control" name="log_time" value="<?php echo date('H:i'); ?>" required>
-                                    </div>
-                                </div>
-                                
-                                <div class="mb-3">
-                                    <label class="form-label">Traffic Status *</label>
-                                    <select class="form-select" name="status_id" required>
-                                        <option value="">Select traffic status</option>
-                                        <?php foreach ($status_types as $status): ?>
-                                            <option value="<?php echo $status['status_id']; ?>"><?php echo $status['status_name']; ?> - <?php echo $status['description']; ?></option>
-                                        <?php endforeach; ?>
-                                    </select>
-                                </div>
-                                
-                                <div class="row mb-3">
-                                    <div class="col-md-6">
-                                        <label class="form-label">Average Speed (km/h)</label>
-                                        <input type="number" class="form-control" name="average_speed" placeholder="Optional">
-                                    </div>
-                                    <div class="col-md-6">
-                                        <label class="form-label">Vehicle Count</label>
-                                        <input type="number" class="form-control" name="vehicle_count" placeholder="Optional">
-                                    </div>
-                                </div>
-                                
-                                <div class="mb-3">
-                                    <label class="form-label">Additional Notes</label>
-                                    <textarea class="form-control" name="notes" rows="3" placeholder="Any additional details about traffic conditions"></textarea>
-                                </div>
-                                
-                                <button type="submit" name="create_traffic_log" class="btn btn-primary">
-                                    <i class="bx bx-save"></i> Save Log
-                                </button>
-                                <button type="reset" class="btn btn-outline-secondary ms-2">
-                                    <i class="bx bx-reset"></i> Reset
-                                </button>
-                            </form>
-                        </div>
+                      <label class="form-label">Vehicle Type</label>
+                      <select class="form-select" name="vehicle_type" required>
+                        <option value="">Select vehicle type</option>
+                        <option value="bus" <?php echo (isset($_POST['vehicle_type']) && $_POST['vehicle_type'] == 'bus') ? 'selected' : ''; ?>>Bus</option>
+                        <option value="jeepney" <?php echo (isset($_POST['vehicle_type']) && $_POST['vehicle_type'] == 'jeepney') ? 'selected' : ''; ?>>Jeepney</option>
+                        <option value="van" <?php echo (isset($_POST['vehicle_type']) && $_POST['vehicle_type'] == 'van') ? 'selected' : ''; ?>>Van</option>
+                      </select>
                     </div>
-                    
                     <div class="col-md-6">
-                        <div class="traffic-form">
-                            <h4><i class="bx bx-map"></i> Recent Traffic Logs</h4>
-                            <div class="report-table">
-                                <table class="table table-hover">
-                                    <thead>
-                                        <tr>
-                                            <th>Location</th>
-                                            <th>Date/Time</th>
-                                            <th>Status</th>
-                                            <th>Action</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody id="recentLogsTable">
-                                        <?php if (empty($recent_logs)): ?>
-                                            <tr>
-                                                <td colspan="4" class="text-center">No recent logs found</td>
-                                            </tr>
-                                        <?php else: ?>
-                                            <?php foreach ($recent_logs as $log): ?>
-                                                <tr>
-                                                    <td><?php echo htmlspecialchars($log['location']); ?></td>
-                                                    <td><?php echo $log['log_date'] . ' ' . $log['log_time']; ?></td>
-                                                    <td>
-                                                        <?php 
-                                                        $badge_class = '';
-                                                        if ($log['status_name'] == 'Low') $badge_class = 'bg-success';
-                                                        elseif ($log['status_name'] == 'Medium') $badge_class = 'bg-warning';
-                                                        else $badge_class = 'bg-danger';
-                                                        ?>
-                                                        <span class="badge <?php echo $badge_class; ?>"><?php echo $log['status_name']; ?></span>
-                                                    </td>
-                                                    <td>
-                                                        <form method="POST" style="display: inline;">
-                                                            <input type="hidden" name="log_id" value="<?php echo $log['log_id']; ?>">
-                                                            <button type="submit" name="delete_log" class="btn btn-sm btn-outline-danger" onclick="return confirm('Are you sure you want to delete this log?')">
-                                                                <i class="bx bx-trash"></i>
-                                                            </button>
-                                                        </form>
-                                                    </td>
-                                                </tr>
-                                            <?php endforeach; ?>
-                                        <?php endif; ?>
-                                    </tbody>
-                                </table>
-                            </div>
-                            <div class="alert alert-info mt-3">
-                                <i class="bx bx-info-circle"></i> Logs are saved to the database.
-                            </div>
-                        </div>
+                      <label class="form-label">Fare (PHP)</label>
+                      <input type="number" class="form-control" name="fare" placeholder="15.00" step="0.50" min="0" value="<?php echo isset($_POST['fare']) ? htmlspecialchars($_POST['fare']) : ''; ?>" required>
                     </div>
-                </div>
+                  </div>
+                  
+                  <div class="mb-3">
+                    <label class="form-label">Start Location</label>
+                    <input type="text" class="form-control" name="start_location" placeholder="Terminal/Station name" value="<?php echo isset($_POST['start_location']) ? htmlspecialchars($_POST['start_location']) : ''; ?>" required>
+                  </div>
+                  
+                  <div class="mb-3">
+                    <label class="form-label">End Location</label>
+                    <input type="text" class="form-control" name="end_location" placeholder="Destination name" value="<?php echo isset($_POST['end_location']) ? htmlspecialchars($_POST['end_location']) : ''; ?>" required>
+                  </div>
+                  
+                  <div class="row mb-3">
+                    <div class="col-md-6">
+                      <label class="form-label">First Trip</label>
+                      <input type="time" class="form-control" name="first_trip" value="<?php echo isset($_POST['first_trip']) ? htmlspecialchars($_POST['first_trip']) : ''; ?>" required>
+                    </div>
+                    <div class="col-md-6">
+                      <label class="form-label">Last Trip</label>
+                      <input type="time" class="form-control" name="last_trip" value="<?php echo isset($_POST['last_trip']) ? htmlspecialchars($_POST['last_trip']) : ''; ?>" required>
+                    </div>
+                  </div>
+                  
+                  <div class="mb-3">
+                    <label class="form-label">Frequency (minutes)</label>
+                    <input type="number" class="form-control" name="frequency" placeholder="15" min="5" max="60" value="<?php echo isset($_POST['frequency']) ? htmlspecialchars($_POST['frequency']) : ''; ?>" required>
+                  </div>
+                  
+                  <div class="mb-3">
+                    <label class="form-label">Operating Days</label>
+                    <div class="form-check-group">
+                      <div class="form-check form-check-inline">
+                        <input class="form-check-input" type="checkbox" name="operating_days[]" value="monday" id="monday" <?php echo (isset($_POST['operating_days']) && in_array('monday', $_POST['operating_days'])) ? 'checked' : ''; ?>>
+                        <label class="form-check-label" for="monday">Mon</label>
+                      </div>
+                      <div class="form-check form-check-inline">
+                        <input class="form-check-input" type="checkbox" name="operating_days[]" value="tuesday" id="tuesday" <?php echo (isset($_POST['operating_days']) && in_array('tuesday', $_POST['operating_days'])) ? 'checked' : ''; ?>>
+                        <label class="form-check-label" for="tuesday">Tue</label>
+                      </div>
+                      <div class="form-check form-check-inline">
+                        <input class="form-check-input" type="checkbox" name="operating_days[]" value="wednesday" id="wednesday" <?php echo (isset($_POST['operating_days']) && in_array('wednesday', $_POST['operating_days'])) ? 'checked' : ''; ?>>
+                        <label class="form-check-label" for="wednesday">Wed</label>
+                      </div>
+                      <div class="form-check form-check-inline">
+                        <input class="form-check-input" type="checkbox" name="operating_days[]" value="thursday" id="thursday" <?php echo (isset($_POST['operating_days']) && in_array('thursday', $_POST['operating_days'])) ? 'checked' : ''; ?>>
+                        <label class="form-check-label" for="thursday">Thu</label>
+                      </div>
+                      <div class="form-check form-check-inline">
+                        <input class="form-check-input" type="checkbox" name="operating_days[]" value="friday" id="friday" <?php echo (isset($_POST['operating_days']) && in_array('friday', $_POST['operating_days'])) ? 'checked' : ''; ?>>
+                        <label class="form-check-label" for="friday">Fri</label>
+                      </div>
+                      <div class="form-check form-check-inline">
+                        <input class="form-check-input" type="checkbox" name="operating_days[]" value="saturday" id="saturday" <?php echo (isset($_POST['operating_days']) && in_array('saturday', $_POST['operating_days'])) ? 'checked' : ''; ?>>
+                        <label class="form-check-label" for="saturday">Sat</label>
+                      </div>
+                      <div class="form-check form-check-inline">
+                        <input class="form-check-input" type="checkbox" name="operating_days[]" value="sunday" id="sunday" <?php echo (isset($_POST['operating_days']) && in_array('sunday', $_POST['operating_days'])) ? 'checked' : ''; ?>>
+                        <label class="form-check-label" for="sunday">Sun</label>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <button type="submit" class="btn btn-primary">
+                    <i class="bx bx-save"></i> Save Schedule
+                  </button>
+                  <button type="reset" class="btn btn-outline-secondary ms-2">
+                    <i class="bx bx-reset"></i> Reset
+                  </button>
+                </form>
+              </div>
             </div>
             
-            <!-- Traffic Volume Status Tab -->
-            <div id="traffic_volume_status" class="tab-content" style="display: none;">
-                <div class="row">
-                    <div class="col-md-4">
-                        <div class="traffic-form">
-                            <h4><i class="bx bx-traffic-cone"></i> Traffic Status Overview</h4>
-                            
-                            <?php foreach ($status_types as $status): ?>
-                                <div class="traffic-status-card p-3 mb-3" style="border-left-color: <?php echo $status['color_code']; ?>; background: linear-gradient(to right, <?php echo hex2rgba($status['color_code'], 0.05); ?>, white);">
-                                    <div class="d-flex justify-content-between align-items-center">
-                                        <div>
-                                            <h5><?php echo $status['status_name']; ?> Traffic</h5>
-                                            <p class="mb-0"><?php echo $status['description']; ?></p>
-                                            <small class="text-muted">
-                                                Speed: 
-                                                <?php 
-                                                if ($status['min_speed_kmh'] !== null && $status['max_speed_kmh'] !== null) {
-                                                    echo $status['min_speed_kmh'] . '-' . $status['max_speed_kmh'] . ' km/h';
-                                                } else {
-                                                    echo 'N/A';
-                                                }
-                                                ?>
-                                            </small>
-                                        </div>
-                                        <div class="traffic-signal" style="background-color: <?php echo $status['color_code']; ?>;">
-                                            <?php echo strtoupper($status['status_name']); ?>
-                                        </div>
-                                    </div>
-                                </div>
-                            <?php endforeach; ?>
-
-                            <div class="mt-3">
-                                <h6>Traffic Level Definitions:</h6>
-                                <ul class="list-unstyled">
-                                    <?php foreach ($status_types as $status): ?>
-                                        <li>
-                                            <span class="status-indicator" style="background-color: <?php echo $status['color_code']; ?>"></span> 
-                                            <strong><?php echo $status['status_name']; ?>:</strong> <?php echo $status['description']; ?>
-                                        </li>
-                                    <?php endforeach; ?>
-                                </ul>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div class="col-md-8">
-                        <div class="traffic-form">
-                            <h4><i class="bx bx-map-alt"></i> Traffic Status Map</h4>
-                            <div style="height: 400px; background-color: #f5f5f5; border-radius: 10px; display: flex; align-items: center; justify-content: center; position: relative;">
-                                <div style="text-align: center;">
-                                    <i class="bx bx-map" style="font-size: 3rem; color: #ccc;"></i>
-                                    <p>Interactive traffic status map would appear here</p>
-                                    <small class="text-muted">Real-time traffic monitoring visualization</small>
-                                </div>
-                            </div>
-                            
-                            <div class="mt-3">
-                                <button class="btn btn-outline-primary" onclick="refreshTrafficStatus()">
-                                    <i class="bx bx-refresh"></i> Refresh Status
-                                </button>
-                                <button class="btn btn-outline-secondary ms-2" onclick="filterLocations()">
-                                    <i class="bx bx-filter"></i> Filter Locations
-                                </button>
-                                <button class="btn btn-outline-info ms-2" onclick="toggleMapView()">
-                                    <i class="bx bx-layer"></i> Toggle View
-                                </button>
-                            </div>
-                        </div>
-                    </div>
+            <div class="col-md-7">
+              <div class="transport-form">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                  <h4><i class="bx bx-list-ul"></i> Route Schedules</h4>
+                  <button class="btn btn-sm btn-outline-primary" onclick="exportSchedules()">
+                    <i class="bx bx-download"></i> Export
+                  </button>
                 </div>
+                <div class="schedule-table">
+                  <table class="table table-hover">
+                    <thead>
+                      <tr>
+                        <th>Route</th>
+                        <th>Type</th>
+                        <th>Schedule</th>
+                        <th>Frequency</th>
+                        <th>Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody id="scheduleTable">
+                      <?php foreach ($schedules as $schedule): ?>
+                      <tr>
+                        <td>
+                          <strong><?php echo $schedule['route_name']; ?></strong><br>
+                          <small><?php echo $schedule['start_location']; ?> → <?php echo $schedule['end_location']; ?></small>
+                        </td>
+                        <td>
+                          <span class="badge bg-primary"><?php echo strtoupper($schedule['vehicle_type']); ?></span><br>
+                          <small>₱<?php echo $schedule['fare']; ?></small>
+                        </td>
+                        <td>
+                          <?php echo $schedule['first_trip']; ?> - <?php echo $schedule['last_trip']; ?><br>
+                          <small><?php echo strtoupper(str_replace(',', ', ', $schedule['operating_days'])); ?></small>
+                        </td>
+                        <td><?php echo $schedule['frequency']; ?> min</td>
+                        <td>
+                          <button class="btn btn-sm btn-outline-primary" onclick="editSchedule('<?php echo $schedule['route_id']; ?>')">
+                            <i class="bx bx-edit"></i>
+                          </button>
+                          <button class="btn btn-sm btn-outline-danger ms-1" onclick="deleteSchedule('<?php echo $schedule['route_id']; ?>')">
+                            <i class="bx bx-trash"></i>
+                          </button>
+                        </td>
+                      </tr>
+                      <?php endforeach; ?>
+                      <?php if (empty($schedules)): ?>
+                      <tr><td colspan="5" class="text-center">No schedules found</td></tr>
+                      <?php endif; ?>
+                    </tbody>
+                  </table>
+                </div>
+                <div class="alert alert-info mt-3">
+                  <i class="bx bx-info-circle"></i> Schedules are saved to the database and displayed to commuters.
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Arrival Estimator Tab -->
+        <div id="arrival_estimator" class="tab-content" style="display: none;">
+          <div class="row">
+            <div class="col-md-6">
+              <div class="transport-form">
+                <h4><i class="bx bx-map-pin"></i> Vehicle Location Input</h4>
+                <form id="etaForm" method="POST">
+                  <input type="hidden" name="calculate_eta" value="1">
+                  <div class="mb-3">
+                    <label class="form-label">Select Route</label>
+                    <select class="form-select" name="eta_route" required>
+                      <option value="">Choose a route</option>
+                      <?php foreach ($routes as $route): ?>
+                      <option value="<?php echo $route['route_id']; ?>"><?php echo $route['route_name']; ?></option>
+                      <?php endforeach; ?>
+                    </select>
+                  </div>
+                  
+                  <div class="mb-3">
+                    <label class="form-label">Vehicle ID/Number</label>
+                    <input type="text" class="form-control" name="vehicle_id" placeholder="e.g., Bus-001, JP-25" required>
+                  </div>
+                  
+                  <div class="mb-3">
+                    <label class="form-label">Current Location</label>
+                    <input type="text" class="form-control" name="current_location" placeholder="Current stop or landmark" required>
+                  </div>
+                  
+                  <div class="mb-3">
+                    <label class="form-label">Target Stop/Station</label>
+                    <input type="text" class="form-control" name="target_stop" placeholder="Destination stop" required>
+                  </div>
+                  
+                  <div class="row mb-3">
+                    <div class="col-md-6">
+                      <label class="form-label">Distance (km)</label>
+                      <input type="number" class="form-control" name="distance" placeholder="5.2" step="0.1" min="0" required>
+                    </div>
+                    <div class="col-md-6">
+                      <label class="form-label">Traffic Condition</label>
+                      <select class="form-select" name="traffic_condition" required>
+                        <option value="">Select condition</option>
+                        <option value="light">Light Traffic</option>
+                        <option value="moderate">Moderate Traffic</option>
+                        <option value="heavy">Heavy Traffic</option>
+                      </select>
+                    </div>
+                  </div>
+                  
+                  <div class="mb-3">
+                    <label class="form-label">Additional Stops</label>
+                    <input type="number" class="form-control" name="additional_stops" placeholder="3" min="0" max="20">
+                    <small class="form-text text-muted">Number of stops before reaching destination</small>
+                  </div>
+                  
+                  <button type="submit" class="btn btn-primary">
+                    <i class="bx bx-calculator"></i> Calculate ETA
+                  </button>
+                  <button type="button" class="btn btn-outline-success ms-2" onclick="updateETA()">
+                    <i class="bx bx-refresh"></i> Update ETA
+                  </button>
+                </form>
+              </div>
             </div>
             
-            <!-- Daily Monitoring Report Tab -->
-            <div id="daily_monitoring_report" class="tab-content" style="display: none;">
-                <div class="row">
-                    <div class="col-md-12">
-                        <div class="traffic-form">
-                            <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap">
-                                <h4><i class="bx bx-file"></i> Daily Traffic Monitoring Report</h4>
-                                <div class="mt-2 mt-md-0">
-                                    <button class="btn btn-sm btn-outline-secondary" onclick="filterReports()">
-                                        <i class="bx bx-filter"></i> Filter
-                                    </button>
-                                    <button class="btn btn-sm btn-outline-primary ms-2" onclick="exportToPDF()">
-                                        <i class="bx bx-download"></i> Export PDF
-                                    </button>
-                                    <button class="btn btn-sm btn-outline-secondary ms-2" onclick="printReport()">
-                                        <i class="bx bx-printer"></i> Print
-                                    </button>
-                                </div>
-                            </div>
-                            
-                            <div class="report-table">
-                                <table class="table table-hover">
-                                    <thead>
-                                        <tr>
-                                            <th>Location</th>
-                                            <th>Date</th>
-                                            <th>Time</th>
-                                            <th>Status</th>
-                                            <th>Speed (km/h)</th>
-                                            <th>Vehicle Count</th>
-                                            <th>Notes</th>
-                                            <th>Actions</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody id="reportTable">
-                                        <?php if (empty($all_logs)): ?>
-                                            <tr>
-                                                <td colspan="8" class="text-center">No reports available</td>
-                                            </tr>
-                                        <?php else: ?>
-                                            <?php foreach ($all_logs as $log): ?>
-                                                <tr>
-                                                    <td><?php echo htmlspecialchars($log['location']); ?></td>
-                                                    <td><?php echo $log['log_date']; ?></td>
-                                                    <td><?php echo $log['log_time']; ?></td>
-                                                    <td>
-                                                        <span class="status-indicator" style="background-color: <?php echo $log['color_code']; ?>"></span>
-                                                        <?php echo $log['status_name']; ?>
-                                                    </td>
-                                                    <td><?php echo $log['average_speed_kmh'] ?? '-'; ?></td>
-                                                    <td><?php echo $log['vehicle_count'] ?? '-'; ?></td>
-                                                    <td><?php echo !empty($log['notes']) ? htmlspecialchars(substr($log['notes'], 0, 50)) . (strlen($log['notes']) > 50 ? '...' : '') : '-'; ?></td>
-                                                    <td>
-                                                        <button class="btn btn-sm btn-outline-primary me-1" onclick="editLog(<?php echo $log['log_id']; ?>)">
-                                                            <i class="bx bx-edit"></i>
-                                                        </button>
-                                                        <form method="POST" style="display: inline;">
-                                                            <input type="hidden" name="log_id" value="<?php echo $log['log_id']; ?>">
-                                                            <button type="submit" name="delete_log" class="btn btn-sm btn-outline-danger" onclick="return confirm('Are you sure you want to delete this log?')">
-                                                                <i class="bx bx-trash"></i>
-                                                            </button>
-                                                        </form>
-                                                    </td>
-                                                </tr>
-                                            <?php endforeach; ?>
-                                        <?php endif; ?>
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-                    </div>
+            <div class="col-md-6">
+              <div class="transport-form">
+                <h4><i class="bx bx-time-five"></i> Current ETAs</h4>
+                <div id="etaDisplay">
+                  <?php if (isset($_SESSION['eta_data'])): ?>
+                  <div class="eta-display">
+                    <h5><i class="bx bx-bus"></i> <?php echo $_SESSION['eta_data']['vehicle_id']; ?></h5>
+                    <p><strong>Route:</strong> <?php 
+                      $route_name = $pdo->prepare("SELECT route_name FROM transport_routes WHERE route_id = ?");
+                      $route_name->execute([$_SESSION['eta_data']['route']]);
+                      echo $route_name->fetch()['route_name'];
+                    ?></p>
+                    <p><strong>Current Location:</strong> <?php echo $_SESSION['eta_data']['current_location']; ?></p>
+                    <p><strong>Target Stop:</strong> <?php echo $_SESSION['eta_data']['target_stop']; ?></p>
+                    <p><strong>Estimated Arrival:</strong> <?php echo $_SESSION['eta_data']['arrival_time']; ?></p>
+                    <p><strong>Estimated Time:</strong> <?php echo $_SESSION['eta_data']['estimated_minutes']; ?> minutes</p>
+                    <p><small>Calculated at: <?php echo $_SESSION['eta_data']['timestamp']; ?></small></p>
+                  </div>
+                  <?php unset($_SESSION['eta_data']); ?>
+                  <?php else: ?>
+                  <div class="alert alert-info">
+                    <i class="bx bx-info-circle"></i> No ETA data available. Calculate an ETA to display it here.
+                  </div>
+                  <?php endif; ?>
                 </div>
+                
+                <h5 class="mt-4">Recent ETA Calculations</h5>
+                <div class="schedule-table">
+                  <table class="table table-sm">
+                    <thead>
+                      <tr>
+                        <th>Vehicle</th>
+                        <th>Route</th>
+                        <th>ETA (min)</th>
+                        <th>Time</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <?php foreach ($etas as $eta): ?>
+                      <tr>
+                        <td><?php echo $eta['vehicle_id']; ?></td>
+                        <td><?php echo $eta['route_name']; ?></td>
+                        <td><?php echo $eta['estimated_minutes']; ?></td>
+                        <td><?php echo date('H:i', strtotime($eta['created_at'])); ?></td>
+                      </tr>
+                      <?php endforeach; ?>
+                      <?php if (empty($etas)): ?>
+                      <tr><td colspan="4" class="text-center">No ETA records found</td></tr>
+                      <?php endif; ?>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
             </div>
-        </main>
+          </div>
+        </div>
+        
+        <!-- Commuter Info Tab -->
+        <div id="commuter_info" class="tab-content" style="display: none;">
+          <div class="commuter-display">
+            <h3><i class="bx bx-group"></i> Commuter Information Portal</h3>
+            <p>Real-time information for public transport users</p>
+          </div>
+          
+          <div class="row mt-4">
+            <div class="col-md-8">
+              <div class="transport-form">
+                <h4><i class="bx bx-bell"></i> Service Announcements</h4>
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                  <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#announcementModal">
+                    <i class="bx bx-plus"></i> Add Announcement
+                  </button>
+                  <div class="form-check form-switch">
+                    <input class="form-check-input" type="checkbox" id="liveUpdates" checked>
+                    <label class="form-check-label" for="liveUpdates">Live Updates</label>
+                  </div>
+                </div>
+                
+                <div class="announcement-list">
+                  <?php foreach ($announcements as $announcement): ?>
+                  <div class="alert alert-info">
+                    <div class="d-flex justify-content-between">
+                      <h6><?php echo $announcement['title']; ?></h6>
+                      <small><?php echo date('M j, Y', strtotime($announcement['created_at'])); ?></small>
+                    </div>
+                    <p><?php echo $announcement['message']; ?></p>
+                    <?php if ($announcement['end_date']): ?>
+                    <small>Valid until: <?php echo date('M j, Y', strtotime($announcement['end_date'])); ?></small>
+                    <?php endif; ?>
+                  </div>
+                  <?php endforeach; ?>
+                  <?php if (empty($announcements)): ?>
+                  <div class="alert alert-secondary">
+                    <i class="bx bx-info-circle"></i> No active service announcements.
+                  </div>
+                  <?php endif; ?>
+                </div>
+              </div>
+            </div>
+            
+            <div class="col-md-4">
+              <div class="transport-form">
+                <h4><i class="bx bx-stats"></i> Commuter Stats</h4>
+                <div class="stats-container">
+                  <div class="stat-card">
+                    <h5>Peak Hours</h5>
+                    <p>7:00-9:00 AM<br>5:00-7:00 PM</p>
+                  </div>
+                  <div class="stat-card">
+                    <h5>Popular Routes</h5>
+                    <p>City Center - Suburbs<br>Market - Terminal</p>
+                  </div>
+                </div>
+                
+                <h5 class="mt-4">Route Popularity</h5>
+                <canvas id="routePopularityChart"></canvas>
+              </div>
+            </div>
+          </div>
+          
+          <div class="transport-form mt-4">
+            <h4><i class="bx bx-map-alt"></i> Interactive Route Map</h4>
+            <div id="routeMap" style="height: 300px; background-color: #f0f0f0; border-radius: 8px; display: flex; align-items: center; justify-content: center;">
+              <p class="text-muted">Interactive map visualization would appear here</p>
+            </div>
+          </div>
+        </div>
+      </main>
     </section>
-
+    
+    <!-- Announcement Modal -->
+    <div class="modal fade" id="announcementModal" tabindex="-1" aria-hidden="true">
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title">Add Service Announcement</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body">
+            <form id="announcementForm">
+              <div class="mb-3">
+                <label class="form-label">Title</label>
+                <input type="text" class="form-control" name="title" required>
+              </div>
+              <div class="mb-3">
+                <label class="form-label">Message</label>
+                <textarea class="form-control" name="message" rows="3" required></textarea>
+              </div>
+              <div class="mb-3">
+                <label class="form-label">Valid Until (optional)</label>
+                <input type="date" class="form-control" name="end_date">
+              </div>
+            </form>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+            <button type="button" class="btn btn-primary" onclick="saveAnnouncement()">Save Announcement</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
-        // Tab navigation
-        function openTab(evt, tabName) {
-            // Hide all tab content
-            var tabcontent = document.getElementsByClassName("tab-content");
-            for (var i = 0; i < tabcontent.length; i++) {
-                tabcontent[i].style.display = "none";
-            }
-            
-            // Remove active class from all buttons
-            var tabbuttons = document.getElementsByClassName("tab-button");
-            for (var i = 0; i < tabbuttons.length; i++) {
-                tabbuttons[i].classList.remove("active");
-            }
-            
-            // Show the specific tab content
-            document.getElementById(tabName).style.display = "block";
-            
-            // Add active class to the button that opened the tab
-            evt.currentTarget.classList.add("active");
+      // Tab switching function
+      function openTab(evt, tabName) {
+        var i, tabcontent, tabbuttons;
+        tabcontent = document.getElementsByClassName("tab-content");
+        for (i = 0; i < tabcontent.length; i++) {
+          tabcontent[i].style.display = "none";
         }
-        
-        // Initialize charts
-        function initCharts() {
-            // Traffic Trend Chart
-            const trafficTrendCtx = document.getElementById('trafficTrendChart').getContext('2d');
-            const trafficTrendChart = new Chart(trafficTrendCtx, {
-                type: 'line',
-                data: {
-                    labels: ['00:00', '03:00', '06:00', '09:00', '12:00', '15:00', '18:00', '21:00'],
-                    datasets: [{
-                        label: 'Average Speed (km/h)',
-                        data: [65, 60, 45, 35, 55, 40, 30, 50],
-                        borderColor: '#1d3557',
-                        backgroundColor: 'rgba(29, 53, 87, 0.1)',
-                        tension: 0.4,
-                        fill: true
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    plugins: {
-                        title: {
-                            display: true,
-                            text: 'Traffic Speed Trends'
-                        }
-                    },
-                    scales: {
-                        y: {
-                            beginAtZero: false,
-                            min: 0,
-                            max: 100,
-                            title: {
-                                display: true,
-                                text: 'Speed (km/h)'
-                            }
-                        }
-                    }
-                }
-            });
-            
-            // Status Distribution Chart
-            const statusDistributionCtx = document.getElementById('statusDistributionChart').getContext('2d');
-            const statusDistributionChart = new Chart(statusDistributionCtx, {
-                type: 'doughnut',
-                data: {
-                    labels: ['Low Traffic', 'Medium Traffic', 'High Traffic'],
-                    datasets: [{
-                        data: [45, 35, 20],
-                        backgroundColor: ['#06d6a0', '#ffd166', '#e63946'],
-                        borderWidth: 1
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    plugins: {
-                        legend: {
-                            position: 'bottom'
-                        },
-                        title: {
-                            display: true,
-                            text: 'Traffic Status Distribution'
-                        }
-                    }
-                }
-            });
-            
-            // Peak Hours Chart
-            const peakHoursCtx = document.getElementById('peakHoursChart').getContext('2d');
-            const peakHoursChart = new Chart(peakHoursCtx, {
-                type: 'bar',
-                data: {
-                    labels: ['5-6 AM', '6-7 AM', '7-8 AM', '8-9 AM', '9-10 AM', '10-11 AM', '11-12 PM', 
-                            '12-1 PM', '1-2 PM', '2-3 PM', '3-4 PM', '4-5 PM', '5-6 PM', '6-7 PM', '7-8 PM'],
-                    datasets: [{
-                        label: 'Traffic Volume',
-                        data: [20, 45, 85, 95, 70, 60, 55, 50, 45, 40, 45, 80, 90, 75, 50],
-                        backgroundColor: 'rgba(29, 53, 87, 0.7)',
-                        borderColor: 'rgba(29, 53, 87, 1)',
-                        borderWidth: 1
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    scales: {
-                        y: {
-                            beginAtZero: true,
-                            title: {
-                                display: true,
-                                text: 'Traffic Volume (%)'
-                            }
-                        }
-                    }
-                }
-            });
+        tabbuttons = document.getElementsByClassName("tab-button");
+        for (i = 0; i < tabbuttons.length; i++) {
+          tabbuttons[i].className = tabbuttons[i].className.replace(" active", "");
         }
-        
-        // Initialize when page loads
-        document.addEventListener('DOMContentLoaded', function() {
-            initCharts();
-            
-            // Auto-hide alerts after 5 seconds
-            setTimeout(function() {
-                const alerts = document.querySelectorAll('.alert');
-                alerts.forEach(function(alert) {
-                    const bsAlert = new bootstrap.Alert(alert);
-                    bsAlert.close();
-                });
-            }, 5000);
+        document.getElementById(tabName).style.display = "block";
+        evt.currentTarget.className += " active";
+      }
+      
+      // Initialize charts
+      function initCharts() {
+        // Route Performance Chart
+        const perfCtx = document.getElementById('routePerformanceChart').getContext('2d');
+        new Chart(perfCtx, {
+          type: 'bar',
+          data: {
+            labels: ['Route A', 'Route B', 'Route C', 'Route D', 'Route E'],
+            datasets: [{
+              label: 'On-Time Performance (%)',
+              data: [92, 85, 78, 88, 95],
+              backgroundColor: 'rgba(54, 162, 235, 0.5)',
+              borderColor: 'rgba(54, 162, 235, 1)',
+              borderWidth: 1
+            }]
+          },
+          options: {
+            responsive: true,
+            scales: {
+              y: {
+                beginAtZero: true,
+                max: 100
+              }
+            }
+          }
         });
         
-        // Helper functions for traffic monitoring
-        function refreshTrafficStatus() {
-            alert('Traffic status refreshed!');
-            // In a real application, this would fetch updated data from the server
+        // Route Popularity Chart
+        const popCtx = document.getElementById('routePopularityChart').getContext('2d');
+        new Chart(popCtx, {
+          type: 'doughnut',
+          data: {
+            labels: ['Route A', 'Route B', 'Route C', 'Route D'],
+            datasets: [{
+              data: [35, 25, 20, 20],
+              backgroundColor: [
+                'rgba(255, 99, 132, 0.7)',
+                'rgba(54, 162, 235, 0.7)',
+                'rgba(255, 206, 86, 0.7)',
+                'rgba(75, 192, 192, 0.7)'
+              ]
+            }]
+          },
+          options: {
+            responsive: true,
+            plugins: {
+              legend: {
+                position: 'bottom'
+              }
+            }
+          }
+        });
+      }
+      
+      // Initialize on page load
+      document.addEventListener('DOMContentLoaded', function() {
+        initCharts();
+        
+        // Profile dropdown
+        const profileBtn = document.getElementById('profile-btn');
+        const dropdownMenu = document.getElementById('dropdown-menu');
+        
+        profileBtn.addEventListener('click', function(e) {
+          e.preventDefault();
+          dropdownMenu.style.display = dropdownMenu.style.display === 'block' ? 'none' : 'block';
+        });
+        
+        // Close dropdown when clicking outside
+        document.addEventListener('click', function(e) {
+          if (!profileBtn.contains(e.target) && !dropdownMenu.contains(e.target)) {
+            dropdownMenu.style.display = 'none';
+          }
+        });
+        
+        // Avatar modal
+        const avatar = document.getElementById('profileAvatar');
+        const modal = document.getElementById('avatarModal');
+        const modalImg = document.getElementById('modalImage');
+        const closeBtn = document.querySelector('.close');
+        
+        avatar.addEventListener('click', function() {
+          modal.style.display = 'block';
+          modalImg.src = this.src;
+        });
+        
+        closeBtn.addEventListener('click', function() {
+          modal.style.display = 'none';
+        });
+        
+        window.addEventListener('click', function(e) {
+          if (e.target === modal) {
+            modal.style.display = 'none';
+          }
+        });
+      });
+      
+      // Form validation
+      function validateTimetableForm() {
+        const form = document.getElementById('timetableForm');
+        const operatingDays = form.querySelectorAll('input[name="operating_days[]"]:checked');
+        
+        if (operatingDays.length === 0) {
+          alert('Please select at least one operating day.');
+          return false;
         }
         
-        function filterLocations() {
-            alert('Filtering locations...');
-            // In a real application, this would show a filter modal
+        return true;
+      }
+      
+      // Export schedules
+      function exportSchedules() {
+        alert('Export functionality would be implemented here.');
+      }
+      
+      // Edit schedule
+      function editSchedule(routeId) {
+        alert('Edit functionality for route ' + routeId + ' would be implemented here.');
+      }
+      
+      // Delete schedule
+      function deleteSchedule(routeId) {
+        if (confirm('Are you sure you want to delete this schedule?')) {
+          alert('Delete functionality for route ' + routeId + ' would be implemented here.');
         }
-        
-        function toggleMapView() {
-            alert('Toggling map view...');
-            // In a real application, this would switch between map and list views
-        }
-        
-        function filterReports() {
-            alert('Filtering reports...');
-            // In a real application, this would show a filter modal
-        }
-        
-        function exportToPDF() {
-            alert('Exporting to PDF...');
-            // In a real application, this would generate and download a PDF report
-        }
-        
-        function printReport() {
-            alert('Printing report...');
-            // In a real application, this would open the print dialog
-        }
-        
-        function editLog(logId) {
-            alert('Editing log ID: ' + logId);
-            // In a real application, this would open an edit modal
-        }
+      }
+      
+      // Update ETA
+      function updateETA() {
+        alert('Update ETA functionality would be implemented here.');
+      }
+      
+      // Save announcement
+      function saveAnnouncement() {
+        alert('Save announcement functionality would be implemented here.');
+        // Close modal
+        const modal = bootstrap.Modal.getInstance(document.getElementById('announcementModal'));
+        modal.hide();
+      }
     </script>
-</body>
+  </body>
 </html>
-
-<?php
-// Helper function to convert hex color to rgba
-function hex2rgba($color, $opacity = false) {
-    $default = 'rgb(0,0,0)';
-    
-    // Return default if no color provided
-    if(empty($color))
-        return $default; 
-    
-    // Sanitize $color if "#" is provided 
-    if ($color[0] == '#' ) {
-        $color = substr( $color, 1 );
-    }
-    
-    // Check if color has 6 or 3 characters and get values
-    if (strlen($color) == 6) {
-        $hex = array( $color[0] . $color[1], $color[2] . $color[3], $color[4] . $color[5] );
-    } elseif ( strlen( $color ) == 3 ) {
-        $hex = array( $color[0] . $color[0], $color[1] . $color[1], $color[2] . $color[2] );
-    } else {
-        return $default;
-    }
-    
-    // Convert hexadec to rgb
-    $rgb =  array_map('hexdec', $hex);
-    
-    // Check if opacity is set(rgba or rgb)
-    if($opacity){
-        if(abs($opacity) > 1)
-            $opacity = 1.0;
-        $output = 'rgba('.implode(",",$rgb).','.$opacity.')';
-    } else {
-        $output = 'rgb('.implode(",",$rgb).')';
-    }
-    
-    // Return rgb(a) color string
-    return $output;
-}
-?>
