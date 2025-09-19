@@ -489,8 +489,8 @@ if (in_array($user_role, ['admin', 'officer'])) {
                 <button class="tab-button" onclick="openTab(event, 'apply_permit')">
                     <i class="bx bx-edit"></i> Apply for Permit
                 </button>
-                <button class="tab-button" onclick="openTab(event, 'my_permits')">
-                    <i class="bx bx-file"></i> My Permits
+                <button class="tab-button" onclick="openTab(event, 'permits')">
+                    <i class="bx bx-file"></i> Permits
                 </button>
                 <?php if (in_array($user_role, ['admin', 'officer'])): ?>
                 <button class="tab-button" onclick="openTab(event, 'manage_permits')">
@@ -542,8 +542,8 @@ if (in_array($user_role, ['admin', 'officer'])) {
                             <button class="btn btn-primary" onclick="openTab(event, 'apply_permit')">
                                 <i class="bx bx-plus"></i> Apply for New Permit
                             </button>
-                            <button class="btn btn-outline-primary" onclick="openTab(event, 'my_permits')">
-                                <i class="bx bx-list-ul"></i> View My Permits
+                            <button class="btn btn-outline-primary" onclick="openTab(event, 'permits')">
+                                <i class="bx bx-list-ul"></i> View Permits
                             </button>
                             <?php if (in_array($user_role, ['admin', 'officer'])): ?>
                             <button class="btn btn-outline-info" onclick="openTab(event, 'manage_permits')">
@@ -614,7 +614,7 @@ if (in_array($user_role, ['admin', 'officer'])) {
                 <div class="row">
                     <div class="col-md-12">
                         <div class="permit-form">
-                            <h4><i class="bx bx-file"></i> My Permit Applications</h4>
+                            <h4><i class="bx bx-file"></i> Permit Applications</h4>
                             
                             <?php if (empty($user_permits)): ?>
                                 <div class="alert alert-info">
