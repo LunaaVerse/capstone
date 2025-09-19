@@ -811,11 +811,7 @@ if (empty($_SESSION['user_id']) && isset($_COOKIE['remember_me'])) {
                                placeholder="Enter your password" required>
                     </div>
                     
-                    <div class="form-actions">
-                        <div class="checkbox-wrapper">
-                            <input type="checkbox" id="rememberMe" name="remember">
-                            <label for="rememberMe">Remember me</label>
-                        </div>
+                   
                         <a href="#" id="forgotPasswordLink" class="forgot-link">Forgot password?</a>
                     </div>
                     
