@@ -314,18 +314,16 @@ if (isset($_SESSION['verification_error'])) {
         .brand-logo {
             width: 120px;
             height: 120px;
-            background: rgba(255, 255, 255, 0.15);
-            border-radius: 24px;
+          
+           
             display: flex;
             align-items: center;
             justify-content: center;
             margin-bottom: 24px;
             position: relative;
             backdrop-filter: blur(10px);
-            border: 2px solid rgba(255, 255, 255, 0.2);
-            box-shadow: 
-                0 20px 40px rgba(0, 0, 0, 0.1),
-                inset 0 1px 0 rgba(255, 255, 255, 0.2);
+     
+         
         }
         
         .brand-logo i {
@@ -761,11 +759,10 @@ if (isset($_SESSION['verification_error'])) {
     <div class="container">
         <div class="auth-wrapper">
             <!-- Branding Section -->
-            <div class="auth-brand">
-                 <div class="brand-logo">
-                <<img src="img/ttm.png" alt="TTM Logo" style="width: 175px; height: 175px;">
-                    <i class="fas fa-traffic-light"></i>
-                </div>
+               <div class="auth-brand">
+                <div class="brand-logo">
+    <img src="img/ttm.png" alt="TTM Logo" style="width: 175px; height: 175px;">
+</div>
                 <h1 class="brand-title">TTM</h1>
                 <p class="brand-subtitle">Traffic and Transport Management System</p>
                 
