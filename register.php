@@ -5,7 +5,7 @@ session_start([
     'cookie_httponly' => true,
     'use_strict_mode' => true
 ]);
-require_once 'config/db_connection.php';
+require_once 'config/database.php';
 require_once 'vendor/autoload.php';
 
 use PHPMailer\PHPMailer\PHPMailer;
@@ -19,25 +19,15 @@ $firstName = $lastName = $username = $email = '';
 $verificationMethod = '';
 $emailError = false;
 
-// Generate CSRF token
-if (empty($_SESSION['csrf_token'])) {
-    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
-}
-
 // Process form when submitted
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // Check if this is a verification code submission
     if (isset($_POST['verify_code'])) {
         $submittedCode = implode('', $_POST['verification_code']);
-        $storedCode = isset($_SESSION['verification_code']) ? $_SESSION['verification_code'] : '';
+        $storedCode = $_SESSION['verification_code'];
+        $verificationMethod = $_SESSION['verification_method'];
         
-        // Add additional validation
-        if (empty($storedCode)) {
-            $errors[] = "Verification session expired. Please try registering again.";
-            $verificationSent = false;
-            unset($_SESSION['verification_pending']);
-            unset($_SESSION['reg_data']);
-        } elseif ($submittedCode === $storedCode) {
+        if ($submittedCode === $storedCode) {
             // Code matches - complete registration
             $firstName = $_SESSION['reg_data']['firstName'];
             $lastName = $_SESSION['reg_data']['lastName'];
@@ -69,8 +59,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $errors[] = "Registration failed: " . implode(" ", $stmt->errorInfo());
             }
         } else {
-            $errors[] = "Invalid verification code. Please try again.";
-            $verificationSent = true;
+            $_SESSION['verification_error'] = "Invalid verification code. Please try again.";
+            header("Location: register.php");
+            exit();
         }
     } else {
         // This is the initial registration form submission
@@ -85,7 +76,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $email = trim($_POST['email']);
             $password = $_POST['password'];
             $confirmPassword = $_POST['confirmPassword'];
-            $verificationMethod = isset($_POST['verificationMethod']) ? $_POST['verificationMethod'] : '';
+            $verificationMethod = $_POST['verificationMethod'];
             
             // Validate inputs
             if (empty($firstName)) {
@@ -208,6 +199,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
+// Generate CSRF token
+if (empty($_SESSION['csrf_token'])) {
+    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+}
+
 // Check if there's a verification error from a previous attempt
 if (isset($_SESSION['verification_error'])) {
     $errors[] = $_SESSION['verification_error'];
@@ -318,12 +314,16 @@ if (isset($_SESSION['verification_error'])) {
         .brand-logo {
             width: 120px;
             height: 120px;
+          
+           
             display: flex;
             align-items: center;
             justify-content: center;
             margin-bottom: 24px;
             position: relative;
             backdrop-filter: blur(10px);
+     
+         
         }
         
         .brand-logo i {
@@ -759,10 +759,10 @@ if (isset($_SESSION['verification_error'])) {
     <div class="container">
         <div class="auth-wrapper">
             <!-- Branding Section -->
-            <div class="auth-brand">
+               <div class="auth-brand">
                 <div class="brand-logo">
-                    <img src="img/ttm.png" alt="TTM Logo" style="width: 175px; height: 175px;">
-                </div>
+    <img src="img/ttm.png" alt="TTM Logo" style="width: 175px; height: 175px;">
+</div>
                 <h1 class="brand-title">TTM</h1>
                 <p class="brand-subtitle">Traffic and Transport Management System</p>
                 
@@ -1034,12 +1034,17 @@ if (isset($_SESSION['verification_error'])) {
             return true;
         });
         
-        // Auto-focus first verification input
-        <?php if ($verificationSent): ?>
+        // Auto-focus first verification code input
+        <?php if ($verificationSent && !$success): ?>
             window.onload = function() {
                 document.querySelector('input[name="verification_code[]"]').focus();
             };
         <?php endif; ?>
+        
+        // Prevent form resubmission on page refresh
+        if (window.history.replaceState) {
+            window.history.replaceState(null, null, window.location.href);
+        }
     </script>
 </body>
 </html>
